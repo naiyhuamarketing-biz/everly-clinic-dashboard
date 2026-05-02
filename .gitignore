@@ -1,0 +1,34 @@
+# Secrets — NEVER commit
+.env
+.env.local
+credentials/
+.streamlit/secrets.toml
+
+# Cache + outputs
+outputs/
+logs/
+*.log
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Virtualenv
+.venv/
+venv/
+env/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Streamlit
+.streamlit/cache/
+
+# xlsx (sensitive client data — local only)
+*.xlsx
+IMPORTANT.md

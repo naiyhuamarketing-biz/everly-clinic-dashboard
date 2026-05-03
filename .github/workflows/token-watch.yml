@@ -1,0 +1,62 @@
+name: Token expiry watcher
+
+# Once a day, check if FB long-lived token is approaching expiry.
+# Token auto-extends on Meta API use (which keepalive triggers every 14 min),
+# so under normal operation this should NEVER alert.
+# But if keepalive fails for many days, this is the safety net that
+# notifies the LINE group BEFORE the dashboard breaks.
+on:
+  schedule:
+    - cron: '0 5 * * *'  # 12:00 BKK every day
+  workflow_dispatch:
+
+concurrency:
+  group: token-watch
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check FB token expiry
+        run: |
+          set -e
+          # Pre-warm Render in case it's cold
+          curl -s -o /dev/null --max-time 90 \
+            "https://everly-clinic.onrender.com/api/health" || true
+          sleep 3
+
+          INFO=$(curl -s --max-time 30 \
+            "https://everly-clinic.onrender.com/api/everly/token-info")
+          echo "$INFO"
+
+          DAYS=$(echo "$INFO" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('days_left', -1))")
+          VALID=$(echo "$INFO" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('is_valid', False))")
+          echo "days_left=$DAYS  is_valid=$VALID"
+
+          # Alert thresholds
+          if [ "$VALID" != "True" ]; then
+            MSG="🚨 EVERLY · TOKEN INVALID%0AFB token reports is_valid=false. Dashboard will fail until token is refreshed.%0Ahttps://everly-clinic.onrender.com/api/everly/token-info"
+            ALERT=1
+          elif [ "$DAYS" -lt 7 ]; then
+            MSG="🚨 EVERLY · TOKEN EXPIRES IN $DAYS DAYS%0Aต้อง refresh ทันที!%0Ahttps://everly-clinic.onrender.com/api/everly/token-info"
+            ALERT=1
+          elif [ "$DAYS" -lt 14 ]; then
+            MSG="⚠️ EVERLY · TOKEN EXPIRES IN $DAYS DAYS%0Aควรเตรียม refresh เร็ว ๆ นี้%0Ahttps://everly-clinic.onrender.com/api/everly/token-info"
+            ALERT=1
+          else
+            ALERT=0
+            echo "  ✓ token healthy ($DAYS days left)"
+          fi
+
+          if [ "$ALERT" = "1" ]; then
+            # Decode %0A for the actual LINE message
+            DECODED=$(printf '%s' "$MSG" | sed 's/%0A/\n/g')
+            echo "Sending alert:"
+            echo "$DECODED"
+            curl --fail --max-time 30 \
+              -X POST "https://everly-clinic.onrender.com/api/line/send" \
+              -H "Content-Type: application/json" \
+              -d "$(python3 -c "import json,sys; print(json.dumps({'text': sys.argv[1]}))" "$DECODED")"
+          fi

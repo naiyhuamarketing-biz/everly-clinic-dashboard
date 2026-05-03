@@ -9,7 +9,11 @@ name: Keep Render warm + FB token alive
 # each ~5 sec = well within unlimited public-repo allotment.
 on:
   schedule:
-    - cron: '*/10 * * * *'  # every 10 minutes (UTC, but interval is timezone-agnostic)
+    # Every 14 min keeps Render warm (15-min sleep threshold) without
+    # exceeding free tier 750 hr/month: 14-min interval = ~743 hr/month
+    # peak (still under 750) and lets multiple test runs / manual triggers
+    # have headroom.
+    - cron: '*/14 * * * *'
   workflow_dispatch:
 
 # Cancel pending pings if a new one starts (avoid pile-up)

@@ -8,13 +8,14 @@ Run:   uvicorn api_server:app --port 8000 --reload
 """
 from __future__ import annotations
 import os
+import json
 import time
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Query, Body
+from fastapi import FastAPI, HTTPException, Query, Body, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -41,6 +42,8 @@ app.add_middleware(
 
 # Path to the dashboard HTML (lives inside the repo for Render deploy)
 DASHBOARD_FILE = ROOT / "dashboard.html"
+SENT_STATE_FILE = Path(os.getenv("SENT_STATE_FILE", "/tmp/everly-line-sent.json"))
+SUMMARY_SNAPSHOT_DIR = Path(os.getenv("SUMMARY_SNAPSHOT_DIR", "/tmp/everly-summary-snapshots"))
 
 
 # ── Cache (mirrors Streamlit's @st.cache_data ttl=600) ─────────────
@@ -95,6 +98,83 @@ def _fetch_range(since: date, until: date):
     return _cached(key, lambda: fetch_daily(ACCOUNT_ID, since, until))
 
 
+def _default_report_date() -> date:
+    """Pick the report date safely for scheduled jobs.
+
+    Normal daily send runs at 23:59 BKK, so it should report today.
+    If a delayed/retry job runs shortly after midnight, it should still report
+    yesterday instead of accidentally sending an empty new-day report.
+    """
+    now = now_bkk()
+    if now.hour < 1:
+        return now.date() - timedelta(days=1)
+    return now.date()
+
+
+def _read_sent_state() -> dict:
+    try:
+        if SENT_STATE_FILE.exists():
+            return json.loads(SENT_STATE_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        pass
+    return {}
+
+
+def _write_sent_state(state: dict) -> None:
+    try:
+        SENT_STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        SENT_STATE_FILE.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception:
+        # Sending the report is more important than failing on local state I/O.
+        pass
+
+
+def _already_sent(report_date: date) -> Optional[dict]:
+    return _read_sent_state().get(report_date.isoformat())
+
+
+def _mark_sent(report_date: date, preview: str) -> None:
+    state = _read_sent_state()
+    # Keep the file tiny: only retain the latest 45 report markers.
+    state[report_date.isoformat()] = {
+        "sent_at": now_bkk().isoformat(),
+        "preview": preview[:180],
+    }
+    items = sorted(state.items())[-45:]
+    _write_sent_state(dict(items))
+
+
+def _summary_snapshot_path(since: date, until: date) -> Path:
+    return SUMMARY_SNAPSHOT_DIR / f"{since.isoformat()}__{until.isoformat()}.json"
+
+
+def _read_summary_snapshot(since: date, until: date) -> Optional[dict]:
+    path = _summary_snapshot_path(since, until)
+    try:
+        if path.exists():
+            data = json.loads(path.read_text(encoding="utf-8"))
+            data["stale"] = True
+            data["snapshot_loaded_at"] = now_bkk().isoformat()
+            return data
+    except Exception:
+        pass
+    return None
+
+
+def _write_summary_snapshot(since: date, until: date, data: dict) -> None:
+    try:
+        SUMMARY_SNAPSHOT_DIR.mkdir(parents=True, exist_ok=True)
+        payload = dict(data)
+        payload["stale"] = False
+        payload["snapshot_saved_at"] = now_bkk().isoformat()
+        _summary_snapshot_path(since, until).write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+    except Exception:
+        pass
+
+
 # ── Endpoints ───────────────────────────────────────────────────────
 @app.get("/api/health")
 def health():
@@ -121,6 +201,10 @@ def everly_summary(
     try:
         records = _fetch_range(s, u)
     except Exception as e:
+        snapshot = _read_summary_snapshot(s, u)
+        if snapshot:
+            snapshot["warning"] = f"Meta API error; showing last good snapshot: {str(e)[:160]}"
+            return snapshot
         raise HTTPException(status_code=502, detail=f"Meta API error: {e}")
 
     days = [_day_totals(r) for r in records]
@@ -140,7 +224,7 @@ def everly_summary(
 
     target_roas = 10.0
 
-    return {
+    response = {
         "since": s.isoformat(),
         "until": u.isoformat(),
         "n_days": len(days),
@@ -161,6 +245,8 @@ def everly_summary(
         "days": days,
         "fetched_at": now_bkk().isoformat(),
     }
+    _write_summary_snapshot(s, u, response)
+    return response
 
 
 @app.get("/api/everly/day")
@@ -540,22 +626,37 @@ def _build_daily_text(target_d: date) -> str:
 
 
 @app.post("/api/everly/send-daily-line")
-def send_daily_line(target: Optional[str] = Query(None)):
+def send_daily_line(
+    request: Request,
+    target: Optional[str] = Query(None),
+    force: bool = Query(False, description="Force resend even if this report date was already sent."),
+    secret: Optional[str] = Query(None, description="Optional CRON_SECRET fallback for simple cron services."),
+):
     """Build daily report and push to LINE.
-    Called by Render Cron Job at 23:59 BKK (16:59 UTC) every day.
+    Called by GitHub Actions at 23:59 BKK (16:59 UTC) every day.
     `target` defaults to today (BKK). Token-protected via X-Cron-Secret header
     if CRON_SECRET env var is set.
     """
-    # Optional: enforce a shared secret so random callers can't spam LINE.
-    secret = os.getenv("CRON_SECRET", "")
-    if secret:
-        from fastapi import Request  # local import to keep top-level minimal
-        # Header check is done via dependency in production; for simplicity
-        # we just require the secret to be passed as a query param.
-        pass  # Keep simple — Render Cron URL embeds the secret already
+    # Optional hardening: if CRON_SECRET is set on Render, only scheduled jobs
+    # that know the secret can trigger LINE sends.
+    expected_secret = os.getenv("CRON_SECRET", "")
+    if expected_secret:
+        supplied_secret = request.headers.get("x-cron-secret") or secret or ""
+        if supplied_secret != expected_secret:
+            raise HTTPException(401, "Invalid cron secret")
 
-    today = today_bkk()
-    d = date.fromisoformat(target) if target else today
+    d = date.fromisoformat(target) if target else _default_report_date()
+
+    existing = _already_sent(d)
+    if existing and not force:
+        return {
+            "ok": True,
+            "skipped": True,
+            "reason": "already_sent",
+            "date": d.isoformat(),
+            "first_sent_at": existing.get("sent_at"),
+            "preview": existing.get("preview", ""),
+        }
 
     has_token = bool(os.getenv("LINE_CHANNEL_ACCESS_TOKEN"))
     has_group = bool(os.getenv("LINE_GROUP_ID_EVERLY") or os.getenv("LINE_GROUP_ID"))
@@ -571,8 +672,10 @@ def send_daily_line(target: Optional[str] = Query(None)):
     ok = send_line_summary(text)
     if not ok:
         raise HTTPException(502, "LINE push failed (check server logs)")
+    _mark_sent(d, text)
     return {
         "ok": True,
+        "skipped": False,
         "date": d.isoformat(),
         "sent_at": now_bkk().isoformat(),
         "preview": text[:200] + ("..." if len(text) > 200 else ""),
@@ -582,12 +685,23 @@ def send_daily_line(target: Optional[str] = Query(None)):
 @app.get("/api/everly/daily-text")
 def daily_text(target: Optional[str] = Query(None)):
     """Preview the daily report text without sending. Useful for debugging."""
-    today = today_bkk()
-    d = date.fromisoformat(target) if target else today
+    d = date.fromisoformat(target) if target else _default_report_date()
     try:
         return {"date": d.isoformat(), "text": _build_daily_text(d)}
     except Exception as e:
         raise HTTPException(502, f"Failed to build report: {e}")
+
+
+@app.get("/api/everly/send-state")
+def send_state():
+    """Small diagnostic endpoint showing which report dates were sent."""
+    state = _read_sent_state()
+    return {
+        "ok": True,
+        "state_file": str(SENT_STATE_FILE),
+        "sent_dates": sorted(state.keys()),
+        "latest": dict(sorted(state.items())[-5:]),
+    }
 
 
 # ── Dashboard routes (HTML at same origin as API) ─────────────

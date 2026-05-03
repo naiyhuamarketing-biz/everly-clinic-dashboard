@@ -1,11 +1,11 @@
 name: Keep Render warm + FB token alive
 
-# Pings the keepalive endpoint every 10 minutes:
+# Pings the keepalive endpoint every 14 minutes:
 #   1. Keeps Render free dyno from sleeping (15-min idle timeout)
 #   2. Touches Meta API so the FB long-lived token (60-day) auto-extends
 #   3. Means dashboard always loads instantly, never 30s cold start
 #
-# Cost: free for public repos · uses ~144 GitHub Actions runs/day,
+# Cost: free for public repos · uses ~103 GitHub Actions runs/day,
 # each ~5 sec = well within unlimited public-repo allotment.
 on:
   schedule:

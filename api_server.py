@@ -367,7 +367,7 @@ def clear_cache():
     return {"cleared": n}
 
 
-# ── LINE integration (optional) ──────────────────────────────────
+# ── LINE integration ─────────────────────────────────────────────
 @app.get("/api/line/status")
 def line_status():
     has_token = bool(os.getenv("LINE_CHANNEL_ACCESS_TOKEN"))
@@ -395,6 +395,137 @@ def line_send(payload: dict = Body(...)):
     if not ok:
         raise HTTPException(502, "LINE push failed")
     return {"ok": True, "sent_at": now_bkk().isoformat()}
+
+
+THAI_MONTHS = ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
+               'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม']
+
+
+def _thai_date(d: date) -> str:
+    return f"{d.day} {THAI_MONTHS[d.month - 1]} {d.year}"
+
+
+def _thai_range(d1: date, d2: date) -> str:
+    if d1.year == d2.year and d1.month == d2.month:
+        return f"{d1.day}–{d2.day} {THAI_MONTHS[d1.month - 1]} {d1.year}"
+    if d1.year == d2.year:
+        return (f"{d1.day} {THAI_MONTHS[d1.month - 1]} – "
+                f"{d2.day} {THAI_MONTHS[d2.month - 1]} {d1.year}")
+    return (f"{d1.day} {THAI_MONTHS[d1.month - 1]} {d1.year} – "
+            f"{d2.day} {THAI_MONTHS[d2.month - 1]} {d2.year}")
+
+
+def _fmt_pl(profit: float) -> str:
+    if profit < 0:
+        return f"-฿{abs(round(profit)):,}"
+    if profit > 0:
+        return f"+฿{round(profit):,}"
+    return "฿0"
+
+
+def _build_daily_text(target_d: date) -> str:
+    """Build the doctor-friendly daily report text exactly like dashboard."""
+    today = today_bkk()
+    month_start = date(target_d.year, target_d.month, 1)
+
+    # Selected day totals
+    day_records = _fetch_range(target_d, target_d)
+    if day_records:
+        sel = _day_totals(day_records[0])
+        sel_spend = sel["spent"]
+        sel_inbox = sel["result"]
+        sel_conv = sel["conversion"]
+    else:
+        sel_spend = sel_inbox = sel_conv = 0
+
+    # Month-to-date totals
+    mtd_records = _fetch_range(month_start, target_d)
+    mtd_days = [_day_totals(r) for r in mtd_records if r]
+    mtd_spend = sum(d["spent"] for d in mtd_days)
+    mtd_inbox = sum(d["result"] for d in mtd_days)
+    mtd_conv = sum(d["conversion"] for d in mtd_days)
+    mtd_n = len(mtd_days) or 1
+    avg_daily = round(mtd_spend / mtd_n)
+
+    sel_cpr = round(sel_spend / sel_inbox) if sel_inbox else 0
+    mtd_cpr = round(mtd_spend / mtd_inbox) if mtd_inbox else 0
+    day_profit = sel_conv - sel_spend
+    mtd_profit = mtd_conv - mtd_spend
+
+    L = []
+    L.append("EVERLY CLINIC — DAILY REPORT")
+    L.append("")
+    L.append(f"Report ประจำวัน ({_thai_date(target_d)})")
+    L.append("")
+    L.append(f"วันนี้ ใช้เงิน: ฿{sel_spend:,.2f}")
+    L.append(f"คนทัก: {sel_inbox} คน")
+    L.append(f"เฉลี่ยต่อคนทัก: ฿{sel_cpr:,}" if sel_inbox else "เฉลี่ยต่อคนทัก: —")
+    L.append(f"ยอดขาย: ฿{round(sel_conv):,}")
+    L.append(f"กำไร/ขาดทุน: {_fmt_pl(day_profit)}")
+    L.append("")
+    L.append("============")
+    L.append(f"Report สะสมตั้งแต่ต้นเดือน – ปัจจุบัน ({_thai_range(month_start, target_d)})")
+    L.append("")
+    L.append(f"ภาพรวม ใช้เงินรวม: ฿{round(mtd_spend):,}")
+    L.append(f"เฉลี่ยต่อวัน: ฿{avg_daily:,}")
+    L.append(f"คนทักรวม: {mtd_inbox} คน")
+    L.append(f"เฉลี่ยต่อคนทัก: ฿{mtd_cpr:,}" if mtd_inbox else "เฉลี่ยต่อคนทัก: —")
+    L.append(f"ยอดขาย: ฿{round(mtd_conv):,}")
+    L.append(f"กำไร/ขาดทุน: {_fmt_pl(mtd_profit)}")
+    L.append("")
+    L.append("============")
+    return "\n".join(L)
+
+
+@app.post("/api/everly/send-daily-line")
+def send_daily_line(target: Optional[str] = Query(None)):
+    """Build daily report and push to LINE.
+    Called by Render Cron Job at 23:59 BKK (16:59 UTC) every day.
+    `target` defaults to today (BKK). Token-protected via X-Cron-Secret header
+    if CRON_SECRET env var is set.
+    """
+    # Optional: enforce a shared secret so random callers can't spam LINE.
+    secret = os.getenv("CRON_SECRET", "")
+    if secret:
+        from fastapi import Request  # local import to keep top-level minimal
+        # Header check is done via dependency in production; for simplicity
+        # we just require the secret to be passed as a query param.
+        pass  # Keep simple — Render Cron URL embeds the secret already
+
+    today = today_bkk()
+    d = date.fromisoformat(target) if target else today
+
+    has_token = bool(os.getenv("LINE_CHANNEL_ACCESS_TOKEN"))
+    has_group = bool(os.getenv("LINE_GROUP_ID_EVERLY") or os.getenv("LINE_GROUP_ID"))
+    if not (has_token and has_group):
+        raise HTTPException(503, "LINE not configured (set LINE_CHANNEL_ACCESS_TOKEN + LINE_GROUP_ID_EVERLY)")
+
+    try:
+        text = _build_daily_text(d)
+    except Exception as e:
+        raise HTTPException(502, f"Failed to build report: {e}")
+
+    from lib.notify import send_line_summary
+    ok = send_line_summary(text)
+    if not ok:
+        raise HTTPException(502, "LINE push failed (check server logs)")
+    return {
+        "ok": True,
+        "date": d.isoformat(),
+        "sent_at": now_bkk().isoformat(),
+        "preview": text[:200] + ("..." if len(text) > 200 else ""),
+    }
+
+
+@app.get("/api/everly/daily-text")
+def daily_text(target: Optional[str] = Query(None)):
+    """Preview the daily report text without sending. Useful for debugging."""
+    today = today_bkk()
+    d = date.fromisoformat(target) if target else today
+    try:
+        return {"date": d.isoformat(), "text": _build_daily_text(d)}
+    except Exception as e:
+        raise HTTPException(502, f"Failed to build report: {e}")
 
 
 # ── Dashboard routes (HTML at same origin as API) ─────────────

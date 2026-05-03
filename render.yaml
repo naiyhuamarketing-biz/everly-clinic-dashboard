@@ -1,0 +1,33 @@
+# Render blueprint — Everly Clinic dashboard + cron LINE notification
+#
+# Two services:
+#   1. Web service (FastAPI) — serves dashboard + API endpoints 24/7
+#   2. Cron Job — pings /api/everly/send-daily-line every day at 23:59 BKK (16:59 UTC)
+#
+# Env vars set via Render dashboard (NOT committed):
+#   FB_ACCESS_TOKEN, FB_APP_ID, FB_APP_SECRET, FB_ACCOUNT_EVERLY
+#   LINE_CHANNEL_ACCESS_TOKEN, LINE_GROUP_ID_EVERLY
+services:
+  - type: web
+    name: everly-clinic
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn api_server:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11"
+      - key: TZ
+        value: Asia/Bangkok
+
+  - type: cron
+    name: everly-daily-line
+    runtime: python
+    plan: free
+    # 16:59 UTC = 23:59 Bangkok time (UTC+7)
+    schedule: "59 16 * * *"
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -c "import requests; r = requests.post('https://everly-clinic.onrender.com/api/everly/send-daily-line', timeout=60); print(r.status_code, r.text)"
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11"

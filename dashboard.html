@@ -1145,8 +1145,8 @@ function renderMonthCards(months) {
       ? 'kpi card-luxe' : 'kpi';
     const titleColor = isLatest ? 'var(--rg-deepest)' : 'var(--rg-deep)';
     return `<div class="${cardCls}" style="padding:18px">
-      <div class="stamp" style="color:${titleColor}; margin-bottom:6px">${MONTH_FULL_TH[m.monthIdx]} ${m.year+543-2026+2569}</div>
-      <div class="font-serif text-2xl" style="color:var(--rg-deepest); line-height:1">${MONTH_TH[m.monthIdx]} ${String(m.year).slice(2)}</div>
+      <div class="stamp" style="color:${titleColor}; margin-bottom:6px">${isLatest ? 'เดือนปัจจุบัน' : 'เดือนที่ผ่านมา'}</div>
+      <div class="font-serif text-2xl" style="color:var(--rg-deepest); line-height:1.1">${MONTH_FULL_TH[m.monthIdx]}</div>
       <div class="text-[10px] mt-1" style="color:var(--soft)">${m.n} วัน</div>
       <div class="mt-3 space-y-1.5 text-xs">
         <div class="flex justify-between"><span style="color:var(--soft)">ใช้จ่าย</span><span class="num font-semibold">${fmt(m.spend)} ${prev?deltaHTML(m.spend, prev.spend):''}</span></div>
@@ -1235,7 +1235,7 @@ function fmtPL(profit) {
   if (profit > 0) return `+฿${Math.round(profit).toLocaleString('th-TH')}`;
   return '฿0';
 }
-function buildSimpleReport(selDate, selSpend, selInbox, mt, nDays, mConv) {
+function buildSimpleReport(selDate, selSpend, selInbox, selConv, mt, nDays, mConv) {
   const d = new Date(selDate);
   const monthStartD = new Date(d.getFullYear(), d.getMonth(), 1);
   const todayTh = thaiDate(d);
@@ -1243,28 +1243,27 @@ function buildSimpleReport(selDate, selSpend, selInbox, mt, nDays, mConv) {
   const selCpr = selInbox > 0 ? Math.round(selSpend/selInbox) : 0;
   const mCpr = mt.result > 0 ? Math.round(mt.cost_per_result) : 0;
   const avgDaily = Math.round(mt.avg_daily_spend || (nDays > 0 ? mt.spend/nDays : 0));
+  const dayProfit = (selConv || 0) - selSpend;
   const profit = (mt.revenue || 0) - (mt.spend || 0);
 
   const L = [];
   L.push('EVERLY CLINIC — DAILY REPORT');
-  L.push(`Report ประจำวัน  (${todayTh})`);
   L.push('');
-  L.push('ผลลัพธ์วันนี้');
-  L.push(`ใช้เงิน: ฿${selSpend.toLocaleString('th-TH',{minimumFractionDigits:2, maximumFractionDigits:2})}`);
+  L.push(`Report ประจำวัน (${todayTh})`);
+  L.push('');
+  L.push(`วันนี้ ใช้เงิน: ฿${selSpend.toLocaleString('th-TH',{minimumFractionDigits:2, maximumFractionDigits:2})}`);
   L.push(`คนทัก: ${selInbox} คน`);
   L.push(selInbox > 0 ? `เฉลี่ยต่อคนทัก: ฿${selCpr.toLocaleString('th-TH')}` : 'เฉลี่ยต่อคนทัก: —');
+  L.push(`ยอดขาย: ฿${Math.round(selConv || 0).toLocaleString('th-TH')}`);
+  L.push(`กำไร/ขาดทุน: ${fmtPL(dayProfit)}`);
   L.push('');
   L.push('============');
-  L.push('');
   L.push(`Report สะสมตั้งแต่ต้นเดือน – ปัจจุบัน (${rangeTh})`);
   L.push('');
-  L.push('ภาพรวม');
-  L.push(`ใช้เงินรวม: ฿${Math.round(mt.spend).toLocaleString('th-TH')}`);
+  L.push(`ภาพรวม ใช้เงินรวม: ฿${Math.round(mt.spend).toLocaleString('th-TH')}`);
   L.push(`เฉลี่ยต่อวัน: ฿${avgDaily.toLocaleString('th-TH')}`);
-  L.push('');
   L.push(`คนทักรวม: ${mt.result} คน`);
   L.push(mt.result > 0 ? `เฉลี่ยต่อคนทัก: ฿${mCpr.toLocaleString('th-TH')}` : 'เฉลี่ยต่อคนทัก: —');
-  L.push('');
   L.push(`ยอดขาย: ฿${Math.round(mConv).toLocaleString('th-TH')}`);
   L.push(`กำไร/ขาดทุน: ${fmtPL(profit)}`);
   L.push('');
@@ -1298,6 +1297,7 @@ async function fetchReport() {
       isOneDay ? since : until,         // headline date = end of range
       st.spend,                          // selected spend
       st.result,                         // selected inbox
+      st.revenue,                        // selected revenue
       mt,                                // month-to-date totals
       mtdSummary.n_days,                 // days count for month
       mt.revenue,                        // month revenue

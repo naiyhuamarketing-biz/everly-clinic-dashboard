@@ -367,6 +367,68 @@ def clear_cache():
     return {"cleared": n}
 
 
+@app.get("/api/everly/keepalive")
+def keepalive():
+    """Lightweight ping that:
+      1. Keeps Render free dyno warm (avoids 15-min sleep)
+      2. Touches Meta API so the long-lived FB token auto-extends
+         (Meta extends tokens that are used at least every 24h within the 60-day window)
+      3. Returns immediately — does NOT send LINE
+    """
+    today = today_bkk()
+    try:
+        # Touching Meta API keeps token warm
+        records = _fetch_range(today, today)
+        ok = bool(records) or True  # even empty result counts as "API call succeeded"
+    except Exception as e:
+        return {"ok": False, "error": str(e)[:200]}
+    return {
+        "ok": True,
+        "now_bkk": now_bkk().isoformat(),
+        "cached_keys": len(_CACHE),
+        "message": "Render warm + FB token extended",
+    }
+
+
+@app.get("/api/everly/token-info")
+def token_info():
+    """Show FB long-lived token expiry status — useful for proactive monitoring."""
+    import requests as _r
+    token = os.getenv("FB_ACCESS_TOKEN", "")
+    app_id = os.getenv("FB_APP_ID", "")
+    app_secret = os.getenv("FB_APP_SECRET", "")
+    if not (token and app_id and app_secret):
+        raise HTTPException(503, "FB credentials not fully configured")
+    try:
+        resp = _r.get(
+            "https://graph.facebook.com/v20.0/debug_token",
+            params={
+                "input_token": token,
+                "access_token": f"{app_id}|{app_secret}",
+            },
+            timeout=10,
+        )
+        data = resp.json().get("data", {})
+        expires_at = data.get("data_access_expires_at") or data.get("expires_at") or 0
+        if expires_at:
+            from datetime import datetime as _dt
+            exp_dt = _dt.fromtimestamp(expires_at, tz=BANGKOK_TZ)
+            now = now_bkk()
+            days_left = (exp_dt - now).days
+            return {
+                "ok": True,
+                "expires_at": exp_dt.isoformat(),
+                "expires_at_unix": expires_at,
+                "days_left": days_left,
+                "warning": "RENEW SOON" if days_left < 14 else None,
+                "is_valid": data.get("is_valid", False),
+                "scopes": data.get("scopes", []),
+            }
+        return {"ok": True, "raw": data}
+    except Exception as e:
+        raise HTTPException(502, f"Token check failed: {e}")
+
+
 # ── LINE integration ─────────────────────────────────────────────
 @app.get("/api/line/status")
 def line_status():

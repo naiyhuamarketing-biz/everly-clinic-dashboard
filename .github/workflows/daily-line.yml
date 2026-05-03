@@ -3,25 +3,49 @@ name: Daily LINE notification
 # Fires every day at 23:59 Bangkok time (16:59 UTC).
 # Free on GitHub Actions for public repos — runs on GitHub's servers,
 # does NOT depend on the user's Mac being on.
+#
+# Reliability features:
+#   - Pre-warm Render dyno before sending (avoids cold-start timeout)
+#   - 5-retry policy with exponential backoff
+#   - Concurrency lock so two cron firings don't double-send
 on:
   schedule:
-    - cron: '59 16 * * *'
-  workflow_dispatch:  # also allow manual trigger from GitHub UI
+    - cron: '59 16 * * *'  # 23:59 BKK
+  workflow_dispatch:  # manual trigger from GitHub UI
+
+concurrency:
+  group: daily-line
+  cancel-in-progress: false  # let pending runs finish (don't lose a daily report)
 
 jobs:
   send:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
-      - name: Ping daily-line endpoint
+      - name: Pre-warm Render
+        run: |
+          for i in 1 2 3; do
+            CODE=$(curl -s -o /dev/null --max-time 90 -w "%{http_code}" \
+                   "https://everly-clinic.onrender.com/api/health" || echo "000")
+            echo "wake attempt $i: $CODE"
+            [ "$CODE" = "200" ] && break
+            sleep 10
+          done
+
+      - name: Send daily LINE
         run: |
           set -e
           URL="https://everly-clinic.onrender.com/api/everly/send-daily-line"
-          echo "POSTing to $URL"
-          # Wake the Render free dyno up first (cold start may take 30s)
-          curl --max-time 90 --silent --output /dev/null --write-out "wake: %{http_code}\n" \
-               "https://everly-clinic.onrender.com/api/health" || true
-          sleep 5
-          curl --fail --max-time 90 --retry 3 --retry-delay 10 \
-               -X POST "$URL" \
-               -H "Content-Type: application/json"
-          echo "  → done"
+          for i in 1 2 3 4 5; do
+            echo "attempt $i ..."
+            RESP=$(curl -s --max-time 60 -X POST "$URL" -H "Content-Type: application/json")
+            echo "$RESP" | head -c 500
+            echo
+            if echo "$RESP" | grep -q '"ok":true'; then
+              echo "  ✓ sent"
+              exit 0
+            fi
+            sleep $((i * 15))
+          done
+          echo "  ✗ all retries failed"
+          exit 1

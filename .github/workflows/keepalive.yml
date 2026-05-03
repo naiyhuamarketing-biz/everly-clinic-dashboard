@@ -1,0 +1,32 @@
+name: Keep Render warm + FB token alive
+
+# Pings the keepalive endpoint every 10 minutes:
+#   1. Keeps Render free dyno from sleeping (15-min idle timeout)
+#   2. Touches Meta API so the FB long-lived token (60-day) auto-extends
+#   3. Means dashboard always loads instantly, never 30s cold start
+#
+# Cost: free for public repos · uses ~144 GitHub Actions runs/day,
+# each ~5 sec = well within unlimited public-repo allotment.
+on:
+  schedule:
+    - cron: '*/10 * * * *'  # every 10 minutes (UTC, but interval is timezone-agnostic)
+  workflow_dispatch:
+
+# Cancel pending pings if a new one starts (avoid pile-up)
+concurrency:
+  group: keepalive
+  cancel-in-progress: true
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Ping keepalive endpoint
+        run: |
+          URL="https://everly-clinic.onrender.com/api/everly/keepalive"
+          # Allow up to 90s for cold-start wake; ignore non-200 (don't fail action)
+          STATUS=$(curl -s -o /tmp/body --max-time 90 -w "%{http_code}" "$URL" || echo "000")
+          echo "HTTP $STATUS"
+          cat /tmp/body 2>/dev/null | head -c 500 || true
+          echo

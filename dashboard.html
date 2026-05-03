@@ -1,0 +1,1449 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Everly Clinic · Daily Ads Report</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Italiana&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Prompt:wght@200;300;400;500;600;700&family=Noto+Serif+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    /* Everly brown earthy palette (extracted from logo) */
+    --rg-deepest:#3A1F12;
+    --rg-deep:   #5A3724;
+    --rg-mid:    #7A4F3A;
+    --rg-light:  #9B7558;
+    --rg-pale:   #C9B399;
+    --rg-mist:   #E8DAC2;
+    --blush:     #F0E5D0;
+    --blush-2:   #ECDFC5;
+    --cream:     #F8F1E5;
+    --ivory:     #FDFAF2;
+    --pure:      #FFFFFF;
+    --charcoal:  #2D1B10;
+    --soft:      #6B554A;
+    --gray:      #A8968A;
+    --line:      #E0D2BC;
+    --line-soft: #ECE0CA;
+    --gold:      #B8945F;
+    --gold-soft: #D9C6A0;
+    --sage:      #7A9E7E;
+    --sagebg:    #E8EFE8;
+    --warm:      #C9904E;
+    --warmbg:    #F8EBD7;
+    --dusty:     #A85C4E;
+    --dustybg:   #F2DDD7;
+  }
+  * { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+  html, body { font-family: 'Prompt', 'Plus Jakarta Sans', system-ui, sans-serif; color: var(--charcoal); background: var(--blush); }
+  .font-display { font-family: 'Italiana', 'Noto Serif Thai', serif; }
+  .font-serif   { font-family: 'Cormorant Garamond', 'Noto Serif Thai', serif; }
+  .font-thai-serif { font-family: 'Noto Serif Thai', 'Cormorant Garamond', serif; }
+  .font-serif, .font-thai-serif, .day-strip, .sec-title, .font-display {
+    font-variant-numeric: lining-nums tabular-nums;
+    font-feature-settings: "lnum" 1, "tnum" 1;
+  }
+  .num, .num-input {
+    font-family: 'Inter', 'Plus Jakarta Sans', system-ui;
+    font-variant-numeric: tabular-nums lining-nums;
+    font-feature-settings: "tnum" 1, "lnum" 1, "calt" 0, "ss01" 1;
+  }
+  body::before {
+    content: ''; position: fixed; inset: 0; z-index: -1;
+    background:
+      radial-gradient(ellipse 800px 600px at 80% -10%, rgba(155,117,88,.32), transparent 60%),
+      radial-gradient(ellipse 1000px 700px at 0% 20%, rgba(122,79,58,.22), transparent 55%),
+      radial-gradient(ellipse 700px 500px at 50% 100%, rgba(184,148,95,.28), transparent 60%),
+      radial-gradient(ellipse 500px 400px at 90% 95%, rgba(74,42,24,.14), transparent 55%),
+      linear-gradient(165deg, #F8F1E5 0%, #F0E5D0 50%, #E8DAC2 100%);
+  }
+  .metal {
+    background: linear-gradient(135deg, #7A4F3A 0%, #C9B399 20%, #5A3724 35%, #9B7558 50%, #3A1F12 65%, #B8945F 80%, #7A4F3A 100%);
+    background-size: 200% 200%;
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    animation: shimmer 8s ease infinite;
+  }
+  @keyframes shimmer { 0%,100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
+  .metal-bg { background: linear-gradient(135deg, #7A4F3A 0%, #9B7558 30%, #5A3724 50%, #B8945F 70%, #7A4F3A 100%); }
+  .metal-line { height: 1px; background: linear-gradient(90deg, transparent 0%, var(--rg-mid) 50%, transparent 100%); border: 0; }
+  .card {
+    background: var(--ivory); border: 1px solid var(--line); border-radius: 22px;
+    box-shadow: 0 1px 0 rgba(90,55,36,.04), 0 30px 60px -40px rgba(58,31,18,.20);
+    transition: all .3s ease;
+  }
+  .card:hover { box-shadow: 0 1px 0 rgba(90,55,36,.06), 0 40px 80px -40px rgba(58,31,18,.28); }
+  .card-luxe {
+    background:
+      linear-gradient(180deg, rgba(255,255,255,.55), rgba(255,248,244,1) 60%),
+      linear-gradient(135deg, var(--rg-pale), var(--ivory));
+  }
+  details.section {
+    background: var(--ivory); border: 1px solid var(--line); border-radius: 22px;
+    box-shadow: 0 1px 0 rgba(90,55,36,.04), 0 30px 60px -40px rgba(58,31,18,.18);
+    overflow: hidden; transition: all .3s ease;
+  }
+  details.section[open] { box-shadow: 0 1px 0 rgba(90,55,36,.06), 0 40px 80px -40px rgba(58,31,18,.26); }
+  details.section > summary {
+    list-style: none; cursor: pointer; padding: 26px 32px;
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    user-select: none; transition: background .25s;
+  }
+  details.section > summary:hover { background: linear-gradient(180deg, var(--cream), transparent); }
+  details.section > summary::-webkit-details-marker { display: none; }
+  details.section > summary .chev {
+    width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--line);
+    display: flex; align-items: center; justify-content: center;
+    transition: all .35s cubic-bezier(.4,0,.2,1); color: var(--rg-deep);
+    flex-shrink: 0; background: var(--cream);
+  }
+  details.section[open] > summary .chev { transform: rotate(180deg); background: var(--rg-mist); }
+  details.section > .section-body { padding: 0 32px 32px; }
+  details.section > .section-body.flush { padding: 0; }
+  .hairline { height: 1px; background: linear-gradient(90deg, transparent, var(--line), transparent); }
+
+  .pill { display:inline-flex; align-items:center; gap:6px; padding: 4px 12px; border-radius: 999px; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; white-space: nowrap; }
+  .pill-sage  { background: var(--sagebg); color: var(--sage); }
+  .pill-warm  { background: var(--warmbg); color: var(--warm); }
+  .pill-dusty { background: var(--dustybg); color: var(--dusty); }
+  .pill-rg    { background: var(--rg-mist); color: var(--rg-deep); }
+  .pill-mute  { background: var(--cream); color: var(--soft); border: 1px solid var(--line); }
+
+  .cell {
+    outline: none; padding: 7px 11px; border: 1px solid transparent; border-radius: 8px;
+    transition: all .15s; min-height: 32px; cursor: text; color: var(--charcoal);
+  }
+  .cell:hover { border-color: var(--rg-pale); background: var(--cream); }
+  .cell:focus { border-color: var(--rg-mid); background: var(--pure); box-shadow: 0 0 0 3px rgba(122,79,58,.12); }
+  .cell.empty::before { content: attr(data-placeholder); color: var(--gray); opacity: .6; font-style: italic; pointer-events:none; }
+  .cell.empty:focus::before { content: ''; }
+
+  .num-input, .date-input, .select-input, .url-input {
+    border: 1px solid transparent; outline: none; padding: 6px 10px; border-radius: 8px;
+    background: transparent; transition: all .15s; font-family: inherit; color: inherit; font-size: inherit;
+  }
+  .num-input { font-family: 'Inter', system-ui; text-align: right; width: 100%; }
+  .url-input { width: 100%; font-size: 12px; color: var(--rg-deep); }
+  .num-input:hover, .date-input:hover, .select-input:hover, .url-input:hover { border-color: var(--rg-pale); background: var(--cream); }
+  .num-input:focus, .date-input:focus, .select-input:focus, .url-input:focus { border-color: var(--rg-mid); background: var(--pure); box-shadow: 0 0 0 3px rgba(122,79,58,.12); }
+
+  .row-zebra:nth-child(odd) { background: var(--pinkbg); }
+  .row-zebra:nth-child(even){ background: white; }
+
+  .btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 20px; border-radius: 999px; font-weight: 600; transition: all .25s ease; cursor: pointer; font-size: 13px; letter-spacing: .02em; white-space: nowrap; }
+  .btn-primary { background: var(--rg-deep); color: var(--ivory); border: 1px solid var(--rg-deep); }
+  .btn-primary:hover { background: var(--rg-deepest); border-color: var(--rg-deepest); transform: translateY(-1px); box-shadow: 0 8px 20px -6px rgba(58,31,18,.45); }
+  .btn-ghost { background: transparent; border: 1px solid var(--line); color: var(--rg-deep); }
+  .btn-ghost:hover { background: var(--cream); border-color: var(--rg-light); color: var(--rg-deepest); }
+  .btn-metal { background: linear-gradient(135deg, #B8848B 0%, #D4A8A8 50%, #9C5F66 100%); color: white; border: none; }
+  .btn-metal:hover { background: linear-gradient(135deg, #5A3724, #7A4F3A 50%, #3A1F12); transform: translateY(-1px); box-shadow: 0 10px 25px -8px rgba(58,31,18,.55); }
+  .btn-sm { padding: 7px 14px; font-size: 12px; }
+  .btn-active { background: var(--rg-deep); color: var(--ivory); border-color: var(--rg-deep); }
+
+  .check { width: 22px; height: 22px; border: 1.5px solid var(--rg-pale); border-radius: 6px; cursor: pointer; transition: all .2s; display:flex; align-items:center; justify-content:center; flex-shrink:0; background: var(--ivory); }
+  .check:hover { border-color: var(--rg-mid); }
+  .check.on { background: var(--rg-deep); border-color: var(--rg-deep); }
+  .check.on::after { content: '✓'; color: white; font-weight: 700; font-size: 12px; }
+
+  /* Platform icon button (outline rose-gold) */
+  .plat {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 6px 12px; border-radius: 999px;
+    border: 1px solid var(--rg-pale); color: var(--rg-mid);
+    background: var(--ivory); cursor: pointer; transition: all .2s;
+    font-size: 11px; font-weight: 600; letter-spacing: .04em;
+  }
+  .plat:hover { border-color: var(--rg-mid); color: var(--rg-deep); background: var(--cream); }
+  .plat.on { border-color: var(--rg-deep); background: var(--rg-mist); color: var(--rg-deepest); box-shadow: inset 0 0 0 1px var(--rg-deep); }
+  .plat svg { width: 14px; height: 14px; flex-shrink: 0; }
+  .plat.on svg { stroke: var(--rg-deepest); }
+
+  table.sheet { width: 100%; border-collapse: separate; border-spacing: 0; }
+  table.sheet th {
+    background: var(--ivory); color: var(--soft); font-weight: 600;
+    padding: 14px 14px; text-align: left; font-size: 10px;
+    letter-spacing: 0.12em; text-transform: uppercase;
+    border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 1;
+  }
+  table.sheet td { padding: 4px 6px; vertical-align: middle; border-bottom: 1px solid var(--line-soft); font-size: 14px; }
+  table.sheet tr:hover td { background: rgba(201,179,153,.13); }
+  table.sheet tr.row-zebra:nth-child(odd) td { background: rgba(253,241,238,.40); }
+  table.sheet tr.row-zebra:hover td { background: rgba(201,179,153,.15); }
+
+  .save-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--sage); margin-right: 8px; box-shadow: 0 0 0 3px rgba(122,158,126,.18); }
+  .saving-dot { background: var(--warm); box-shadow: 0 0 0 3px rgba(201,144,78,.18); animation: pulse 1.2s infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
+
+  .toast { position: fixed; bottom: 28px; right: 28px; padding: 12px 22px; border-radius: 999px; background: var(--charcoal); color: var(--ivory); font-weight: 500; box-shadow: 0 20px 50px -15px rgba(58,42,46,.55); transform: translateY(20px); opacity: 0; transition: all .3s; z-index: 100; font-size: 13px; }
+  .toast.show { transform: translateY(0); opacity: 1; }
+  .toast.save { background: var(--rg-deep); }
+
+  .scroll { max-height: 70vh; overflow-y: auto; overflow-x: auto; }
+  .scroll::-webkit-scrollbar { width: 8px; height: 8px; }
+  .scroll::-webkit-scrollbar-track { background: transparent; }
+  .scroll::-webkit-scrollbar-thumb { background: var(--rg-pale); border-radius: 4px; }
+  .scroll::-webkit-scrollbar-thumb:hover { background: var(--rg-mid); }
+
+  .shine-overlay { position: absolute; inset: 0; pointer-events: none;
+    background:
+      radial-gradient(ellipse 70% 80% at 30% 20%, rgba(255,255,255,.5), transparent 50%),
+      radial-gradient(ellipse 50% 60% at 80% 80%, rgba(201,179,153,.35), transparent 60%);
+    mix-blend-mode: overlay;
+  }
+  .ev-mono {
+    width: 96px; height: 96px; border-radius: 50%;
+    background:
+      radial-gradient(circle at 35% 25%, rgba(255,255,255,.40), transparent 55%),
+      linear-gradient(135deg, #C9B399 0%, #9B7558 35%, #5A3724 60%, #7A4F3A 100%);
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Italiana', serif; font-weight: 400;
+    color: #FDFAF2; font-size: 38px; letter-spacing: -.02em; text-transform: lowercase;
+    box-shadow: 0 1px 0 rgba(255,255,255,.4) inset, 0 -2px 6px rgba(58,31,18,.3) inset, 0 30px 60px -20px rgba(58,31,18,.45);
+    position: relative;
+  }
+  .ev-mono::after { content: ''; position: absolute; inset: -10px; border-radius: 50%; border: 1px solid rgba(122,79,58,.4); }
+  .ev-mono::before { content: ''; position: absolute; inset: -16px; border-radius: 50%; border: 1px dashed rgba(122,79,58,.25); }
+
+  .topbar {
+    position: sticky; top: 0; z-index: 50;
+    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    background: rgba(255,252,250,.85);
+    border-bottom: 1px solid var(--line-soft);
+  }
+
+  .kpi { padding: 28px; border-radius: 22px; background: var(--ivory); border: 1px solid var(--line); position: relative; overflow: hidden; transition: all .35s ease; }
+  .kpi:hover { transform: translateY(-2px); box-shadow: 0 30px 60px -25px rgba(58,31,18,.25); border-color: var(--rg-pale); }
+  .kpi-label { text-transform: uppercase; letter-spacing: .14em; font-size: 10px; color: var(--soft); font-weight: 600; }
+  .kpi-value { font-family: 'Inter', system-ui; font-weight: 700; line-height: 1; color: var(--rg-deepest); margin-top: 18px; font-size: 42px; letter-spacing: -.025em; font-variant-numeric: tabular-nums lining-nums; font-feature-settings: "tnum" 1, "lnum" 1, "ss01" 1; }
+  .kpi-sub { font-size: 12px; color: var(--soft); margin-top: 12px; font-weight: 500; }
+  .kpi-deco { position: absolute; right: -20px; top: -20px; width: 130px; height: 130px; border-radius: 50%; background: radial-gradient(circle, var(--rg-mist), transparent 70%); opacity: .5; }
+  .kpi-mini { padding: 18px; border-radius: 16px; background: var(--ivory); border: 1px solid var(--line); }
+  .kpi-mini .kpi-label { font-size: 9px; }
+  .kpi-mini .kpi-value { font-size: 28px; margin-top: 10px; }
+  .kpi-mini .kpi-sub { font-size: 11px; margin-top: 6px; }
+
+  .sec-eyebrow { font-size: 10px; letter-spacing: .25em; text-transform: uppercase; color: var(--soft); font-weight: 600; }
+  .sec-title { font-family: 'Cormorant Garamond', serif; font-weight: 500; font-size: 26px; color: var(--rg-deepest); letter-spacing: -.005em; line-height: 1.2; margin-top: 4px; }
+  .sec-meta { font-size: 13px; color: var(--soft); font-weight: 400; margin-top: 4px; }
+  .stamp { font-family: 'Cinzel', serif; letter-spacing: .25em; font-size: 9px; color: var(--rg-deep); font-weight: 500; }
+
+  /* Range filter pills (Top Highlights / Daily Operations) */
+  .range-pills { display: flex; flex-wrap: wrap; gap: 8px; }
+  .range-pill {
+    padding: 7px 14px; border-radius: 999px; border: 1px solid var(--line);
+    background: var(--ivory); cursor: pointer; font-size: 12px; font-weight: 600;
+    color: var(--soft); transition: all .2s;
+  }
+  .range-pill:hover { border-color: var(--rg-pale); color: var(--rg-deep); background: var(--cream); }
+  .range-pill.on { background: var(--rg-deep); border-color: var(--rg-deep); color: white; }
+
+  /* KOL card — compact for 4-up grid */
+  .kol-card { padding: 14px; border-radius: 14px; background: var(--ivory); border: 1px solid var(--line); transition: all .25s; }
+  .kol-card:hover { border-color: var(--rg-pale); box-shadow: 0 20px 40px -25px rgba(58,31,18,.20); }
+  .kol-card .stamp { font-size: 8px; letter-spacing: .15em; }
+  .kol-mini-check {
+    display: flex; align-items: center; gap: 4px; padding: 3px 6px;
+    border-radius: 6px; border: 1px solid var(--line); background: var(--ivory);
+    cursor: pointer; transition: all .15s; font-size: 10px; font-weight: 600;
+    color: var(--soft); justify-content: center;
+  }
+  .kol-mini-check:hover { border-color: var(--rg-mid); }
+  .kol-mini-check.on { background: var(--rg-deep); color: white; border-color: var(--rg-deep); }
+  .kol-mini-check svg { width: 11px; height: 11px; flex-shrink: 0; }
+  /* Social URL row: icon + URL input combined into a single elegant pill */
+  .social-row {
+    display: flex; align-items: center; gap: 6px; padding: 5px 8px; border-radius: 8px;
+    border: 1px solid var(--line); background: var(--ivory); transition: all .15s;
+  }
+  .social-row:focus-within { border-color: var(--rg-mid); background: var(--cream); box-shadow: 0 0 0 3px rgba(122,79,58,.10); }
+  .social-row.filled { border-color: var(--rg-pale); background: var(--rg-mist); }
+  .social-row.filled .social-icon { color: var(--rg-deepest); }
+  .social-icon {
+    width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+    color: var(--rg-mid); transition: all .15s;
+  }
+  .social-row.filled .social-icon { background: var(--rg-deep); color: white; }
+  .social-row.filled .social-icon:hover { background: var(--rg-deepest); }
+  .social-icon a { display: inline-flex; align-items: center; justify-content: center; width: 100%; height: 100%; color: inherit; }
+  .social-icon svg { width: 11px; height: 11px; }
+  .social-input {
+    flex: 1; min-width: 0; border: none; outline: none; background: transparent;
+    font-size: 10px; color: var(--charcoal); padding: 1px 0;
+  }
+  .social-input::placeholder { color: var(--gray); opacity: .55; font-style: italic; }
+
+  @media print {
+    body::before { background: white; }
+    .no-print { display: none !important; }
+    details.section { box-shadow: none; border: 1px solid var(--line); page-break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Inline SVG icons (outline rose gold) -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-fb" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/>
+    </symbol>
+    <symbol id="i-ig" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="2" y="2" width="20" height="20" rx="5"/>
+      <circle cx="12" cy="12" r="4"/>
+      <circle cx="17.5" cy="6.5" r=".7" fill="currentColor"/>
+    </symbol>
+    <symbol id="i-tt" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M9 12a4 4 0 1 0 4 4V4a5 5 0 0 0 5 5"/>
+    </symbol>
+    <symbol id="i-yt" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="2" y="6" width="20" height="13" rx="3.5"/>
+      <polygon points="10 9.5 15.5 12.5 10 15.5"/>
+    </symbol>
+    <symbol id="i-l8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3" y="3" width="18" height="18" rx="6"/>
+      <path d="M9 8v8M9 12h4M14 8v8" />
+    </symbol>
+    <symbol id="i-drv" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M9.5 3l-6.5 11 3.5 6h13l3.5-6L16.5 3z"/>
+      <path d="M9.5 3l3.25 5.5L16.5 3"/>
+      <path d="M3 14h13.5"/>
+    </symbol>
+    <symbol id="i-pin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+      <circle cx="12" cy="10" r="3"/>
+    </symbol>
+    <symbol id="i-cal" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3" y="4" width="18" height="18" rx="2"/>
+      <line x1="16" y1="2" x2="16" y2="6"/>
+      <line x1="8" y1="2" x2="8" y2="6"/>
+      <line x1="3" y1="10" x2="21" y2="10"/>
+    </symbol>
+    <symbol id="i-pen" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4z"/>
+    </symbol>
+    <symbol id="i-send" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+    </symbol>
+  </defs>
+</svg>
+
+<!-- ===== STICKY TOP BAR ===== -->
+<div class="topbar no-print">
+  <div class="max-w-[1400px] mx-auto px-8 py-3 flex items-center justify-between gap-4 flex-wrap">
+    <div class="flex items-center gap-3">
+      <div class="w-9 h-9 rounded-full metal-bg flex items-center justify-center font-display text-white text-base font-normal lowercase">e</div>
+      <div>
+        <div class="font-display text-base tracking-[.05em] text-[var(--rg-deepest)] lowercase">everly</div>
+        <div class="text-[10px] tracking-widest uppercase text-[var(--soft)]">Daily Ads Report · May 2026</div>
+      </div>
+    </div>
+    <div class="flex items-center gap-3">
+      <div class="text-xs flex items-center" style="color:var(--soft)">
+        <span id="saveDot" class="save-dot"></span>
+        <span id="saveText">บันทึกแล้ว</span>
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="exportJSON()">Export</button>
+      <button class="btn btn-ghost btn-sm" onclick="resetAll()">Reset</button>
+      <button class="btn btn-metal btn-sm" onclick="refreshAllLive()">↻ Refresh All Live</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== HERO ===== -->
+<section class="relative overflow-hidden">
+  <div class="shine-overlay"></div>
+  <div class="max-w-[1400px] mx-auto px-8 pt-20 pb-16 text-center relative">
+    <div class="flex justify-center mb-10"><div class="ev-mono">e</div></div>
+    <div class="stamp mb-3">นายหัว กรุ๊ป</div>
+    <h1 class="font-display text-7xl md:text-8xl font-normal metal tracking-[.02em] leading-none lowercase">everly</h1>
+    <div class="mt-5 text-sm tracking-[.4em] uppercase" style="color:var(--rg-mid); font-weight:400;">Clinic</div>
+    <hr class="metal-line max-w-xs mx-auto mt-8 mb-7" />
+    <div class="font-serif text-2xl md:text-3xl" style="color:var(--charcoal)">Daily Ads Report</div>
+    <div class="mt-2 stamp text-base" style="letter-spacing:.4em">MAY 2026</div>
+    <div class="inline-flex items-center gap-3 mt-10 px-6 py-2.5 rounded-full" style="background: var(--ivory); border: 1px solid var(--line); box-shadow: 0 10px 30px -15px rgba(58,31,18,.25);">
+      <span class="stamp">TARGET ROAS</span>
+      <span class="num metal" style="font-size:24px; font-weight:700; letter-spacing:-.02em">10.00<span style="font-size:.65em; margin-left:1px">x</span></span>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     SECTION 01 · PERFORMANCE OVERVIEW (LIVE)
+     ============================================================ -->
+<section class="max-w-[1400px] mx-auto px-8 pt-6">
+  <details class="section" id="sec-overview" ontoggle="onSectionToggle('overview', this)" open>
+    <summary>
+      <div>
+        <div class="sec-eyebrow flex items-center gap-2">
+          <span>Section 01</span>
+          <span id="ov-live-on" class="pill" style="background:#ECFDF5; color:#16A34A; padding:2px 9px; font-size:9px; letter-spacing:.15em; display:none">
+            <span style="width:6px; height:6px; border-radius:50%; background:#16A34A; display:inline-block; box-shadow:0 0 0 3px rgba(22,163,74,.18); animation:pulse 1.4s infinite"></span> LIVE FROM META
+          </span>
+          <span id="ov-live-off" class="pill pill-mute" style="font-size:9px; letter-spacing:.15em">offline</span>
+        </div>
+        <div class="sec-title">Performance Overview · ภาพรวม</div>
+        <div class="sec-meta" id="ov-meta">เลือกช่วงเวลาด้านล่าง · ดึงสดจาก Meta Marketing API</div>
+      </div>
+      <div class="chev">▾</div>
+    </summary>
+    <div class="section-body">
+      <div class="hairline mb-6"></div>
+
+      <!-- Range selector + timestamp -->
+      <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+        <div class="flex items-center gap-3 flex-wrap">
+          <span class="stamp">PERIOD</span>
+          <div class="range-pills" id="ov-presets"></div>
+        </div>
+        <div class="flex gap-2 items-center">
+          <input type="date" id="ov-since" class="date-input" style="border:1px solid var(--line); padding:6px 10px; border-radius:10px; font-size:12px;" />
+          <input type="date" id="ov-until" class="date-input" style="border:1px solid var(--line); padding:6px 10px; border-radius:10px; font-size:12px;" />
+          <button class="btn btn-ghost btn-sm" onclick="fetchOverview()">↻ Refresh</button>
+        </div>
+      </div>
+
+      <!-- Period summary line + last updated -->
+      <div class="flex flex-wrap items-center justify-between gap-2 mb-5 px-4 py-3 rounded-xl" style="background:var(--cream); border:1px solid var(--line-soft)">
+        <div class="flex items-center gap-2 text-sm">
+          <span class="stamp" style="color:var(--rg-deep)">SHOWING</span>
+          <span class="font-semibold" id="ov-period" style="color:var(--rg-deepest)">—</span>
+        </div>
+        <div class="flex items-center gap-2 text-xs" style="color:var(--soft)">
+          <span class="stamp">LAST UPDATED</span>
+          <span id="ov-updated" class="num font-semibold" style="color:var(--rg-deep)">—</span>
+        </div>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+        <div class="kpi"><div class="kpi-deco"></div><div class="relative"><div class="kpi-label">ยอดใช้จ่าย · Spend</div><div class="kpi-value num" id="ov-spend">฿0</div><div class="kpi-sub" id="ov-spend-sub">เฉลี่ย ฿0/วัน</div></div></div>
+        <div class="kpi"><div class="kpi-deco"></div><div class="relative"><div class="kpi-label">รายได้ · Revenue</div><div class="kpi-value num" id="ov-revenue">฿0</div><div class="kpi-sub">จาก Pixel purchase events</div></div></div>
+        <div class="kpi"><div class="kpi-deco"></div><div class="relative"><div class="kpi-label">ROAS</div><div class="kpi-value num" id="ov-roas">0.00x</div><div class="kpi-sub" id="ov-roas-sub">เป้าหมาย 10x</div></div></div>
+        <div class="kpi"><div class="kpi-deco"></div><div class="relative"><div class="kpi-label">Inbox</div><div class="kpi-value num" id="ov-inbox">0</div><div class="kpi-sub">messaging conversations</div></div></div>
+        <div class="kpi"><div class="kpi-deco"></div><div class="relative"><div class="kpi-label">ต้นทุน / Inbox</div><div class="kpi-value num" id="ov-cpi">฿0</div><div class="kpi-sub">cost per inbox</div></div></div>
+        <div class="kpi"><div class="kpi-deco"></div><div class="relative"><div class="kpi-label">Frequency</div><div class="kpi-value num" id="ov-freq">0.00x</div><div class="kpi-sub">ครั้งที่คนเดิมเห็นโฆษณา</div></div></div>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-5 mt-5">
+        <div class="card p-5"><div class="kpi-label">การมองเห็น · Impressions</div><div class="num mt-2" style="font-size:26px; font-weight:700; color:var(--rg-deepest)" id="ov-impr">0</div></div>
+        <div class="card p-5"><div class="kpi-label">การเข้าถึง · Reach</div><div class="num mt-2" style="font-size:26px; font-weight:700; color:var(--rg-deepest)" id="ov-reach">0</div></div>
+        <div class="card p-5"><div class="kpi-label">กำไร · Net</div><div class="num mt-2" style="font-size:26px; font-weight:700" id="ov-net">฿0</div></div>
+      </div>
+      <div class="card p-6 mt-6">
+        <div class="font-serif text-xl" style="color:var(--rg-deepest)">แนวโน้มยอดใช้จ่าย · Daily Spend</div>
+        <div class="text-xs mt-1 mb-4" style="color:var(--soft)">รายวันตลอดช่วง · sourced live</div>
+        <div style="height: 240px"><canvas id="spendChart"></canvas></div>
+      </div>
+    </div>
+  </details>
+</section>
+
+<!-- ============================================================
+     SECTION 02 · DAILY OPERATIONS (date picker → smart board)
+     ============================================================ -->
+<section class="max-w-[1400px] mx-auto px-8 pt-6">
+  <details class="section" id="sec-daily" ontoggle="onSectionToggle('daily', this)">
+    <summary>
+      <div>
+        <div class="sec-eyebrow flex items-center gap-2">
+          <span>Section 02</span>
+          <span id="dy-live-on" class="pill" style="background:#ECFDF5; color:#16A34A; padding:2px 9px; font-size:9px; letter-spacing:.15em; display:none">
+            <span style="width:6px; height:6px; border-radius:50%; background:#16A34A; display:inline-block; box-shadow:0 0 0 3px rgba(22,163,74,.18); animation:pulse 1.4s infinite"></span> LIVE FROM META
+          </span>
+          <span id="dy-live-off" class="pill pill-mute" style="font-size:9px; letter-spacing:.15em">offline</span>
+        </div>
+        <div class="sec-title">Daily Operations · รายละเอียดรายวัน</div>
+        <div class="sec-meta">เลือกวันที่ → โชว์ Smart Board ของวันนั้น (Spend / Inbox / Top Campaign)</div>
+      </div>
+      <div class="chev">▾</div>
+    </summary>
+    <div class="section-body">
+      <div class="hairline mb-6"></div>
+      <div class="flex flex-wrap items-center justify-between gap-3 mb-5">
+        <div class="flex items-center gap-3 flex-wrap">
+          <span class="stamp">PERIOD</span>
+          <div class="range-pills" id="dy-presets"></div>
+        </div>
+        <div class="flex gap-2 items-center">
+          <input type="date" id="dy-since" class="date-input" style="border:1px solid var(--line); padding:6px 10px; border-radius:10px; font-size:12px;" />
+          <input type="date" id="dy-until" class="date-input" style="border:1px solid var(--line); padding:6px 10px; border-radius:10px; font-size:12px;" />
+          <button class="btn btn-ghost btn-sm" onclick="fetchDailyRange()">↻ Refresh</button>
+        </div>
+      </div>
+      <div id="dy-content"></div>
+    </div>
+  </details>
+</section>
+
+<!-- ============================================================
+     SECTION 03 · TOP HIGHLIGHTS (range filter → top ads)
+     ============================================================ -->
+<section class="max-w-[1400px] mx-auto px-8 pt-6">
+  <details class="section" id="sec-top" ontoggle="onSectionToggle('top', this)">
+    <summary>
+      <div>
+        <div class="sec-eyebrow flex items-center gap-2">
+          <span>Section 03</span>
+          <span id="tp-live-on" class="pill" style="background:#ECFDF5; color:#16A34A; padding:2px 9px; font-size:9px; letter-spacing:.15em; display:none">
+            <span style="width:6px; height:6px; border-radius:50%; background:#16A34A; display:inline-block; box-shadow:0 0 0 3px rgba(22,163,74,.18); animation:pulse 1.4s infinite"></span> LIVE FROM META
+          </span>
+          <span id="tp-live-off" class="pill pill-mute" style="font-size:9px; letter-spacing:.15em">offline</span>
+        </div>
+        <div class="sec-title">Top Highlights · แอดที่ดีที่สุด</div>
+        <div class="sec-meta">เลือกช่วงเวลา → เห็น Smart Board + Top Ads ของช่วงนั้น เรียงตาม ROAS สูงสุด</div>
+      </div>
+      <div class="chev">▾</div>
+    </summary>
+    <div class="section-body">
+      <div class="hairline mb-6"></div>
+      <div class="flex flex-wrap items-center justify-between gap-3 mb-5">
+        <div class="flex items-center gap-3 flex-wrap">
+          <span class="stamp">PERIOD</span>
+          <div class="range-pills" id="tp-presets"></div>
+        </div>
+        <div class="flex gap-2">
+          <input type="date" id="tp-since" class="date-input" style="border:1px solid var(--line); padding:6px 10px; border-radius:10px; font-size:12px;" />
+          <input type="date" id="tp-until" class="date-input" style="border:1px solid var(--line); padding:6px 10px; border-radius:10px; font-size:12px;" />
+          <button class="btn btn-ghost btn-sm" onclick="fetchTopRange(true)">↻ Refresh</button>
+        </div>
+      </div>
+      <div id="tp-content"></div>
+    </div>
+  </details>
+</section>
+
+<!-- ============================================================
+     SECTION 04 · PERFORMANCE TREND (target 10x)
+     ============================================================ -->
+<section class="max-w-[1400px] mx-auto px-8 pt-6">
+  <details class="section" id="sec-trend" ontoggle="onSectionToggle('trend', this)">
+    <summary>
+      <div>
+        <div class="sec-eyebrow flex items-center gap-2">
+          <span>Section 04</span>
+          <span id="tr-live-on" class="pill" style="background:#ECFDF5; color:#16A34A; padding:2px 9px; font-size:9px; letter-spacing:.15em; display:none">
+            <span style="width:6px; height:6px; border-radius:50%; background:#16A34A; display:inline-block; box-shadow:0 0 0 3px rgba(22,163,74,.18); animation:pulse 1.4s infinite"></span> LIVE FROM META
+          </span>
+          <span id="tr-live-off" class="pill pill-mute" style="font-size:9px; letter-spacing:.15em">offline</span>
+        </div>
+        <div class="sec-title">Performance Trend · เปรียบเทียบรายเดือน</div>
+        <div class="sec-meta">ROAS / Spend / Inbox รายเดือน · เทียบ Target <b>10x</b></div>
+      </div>
+      <div class="chev">▾</div>
+    </summary>
+    <div class="section-body">
+      <div class="hairline mb-6"></div>
+      <div class="flex justify-end mb-4">
+        <button class="btn btn-ghost btn-sm" onclick="fetchTrend()">↻ Refresh</button>
+      </div>
+
+      <!-- Month-over-month cards -->
+      <div id="tr-cards" class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6"></div>
+
+      <!-- Two charts side by side -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <!-- Chart 1: ROAS Trend -->
+        <div class="card p-6">
+          <div class="font-serif text-xl mb-1" style="color:var(--rg-deepest)">ROAS Trend</div>
+          <div class="text-xs mb-4" style="color:var(--soft)">เป้าหมาย 10x · ดูแนวโน้มข้ามเดือน</div>
+          <div style="height: 260px"><canvas id="trendChart"></canvas></div>
+          <div class="flex justify-end items-center gap-5 text-xs mt-4" style="color:var(--soft)">
+            <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-sm" style="background:var(--rg-mid)"></span>ROAS</div>
+            <div class="flex items-center gap-2"><span class="w-3 h-px" style="background:var(--gold); border-top: 1px dashed var(--gold)"></span>Target 10.00x</div>
+          </div>
+        </div>
+        <!-- Chart 2: Spend vs Revenue -->
+        <div class="card p-6">
+          <div class="font-serif text-xl mb-1" style="color:var(--rg-deepest)">Spend vs Revenue</div>
+          <div class="text-xs mb-4" style="color:var(--soft)">เปรียบเทียบยอดใช้จ่าย vs รายได้รายเดือน</div>
+          <div style="height: 260px"><canvas id="spendRevChart"></canvas></div>
+          <div class="flex justify-end items-center gap-5 text-xs mt-4" style="color:var(--soft)">
+            <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-sm" style="background:var(--rg-deep)"></span>Spend</div>
+            <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-sm" style="background:var(--rg-light)"></span>Revenue</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </details>
+</section>
+
+<!-- ============================================================
+     SECTION 05 · DAILY REPORT (LIVE — 2 parts)
+     ============================================================ -->
+<section class="max-w-[1400px] mx-auto px-8 pt-6 pb-16">
+  <details class="section" id="sec-report" ontoggle="onSectionToggle('report', this)">
+    <summary>
+      <div>
+        <div class="sec-eyebrow flex items-center gap-2">
+          <span>Section 05</span>
+          <span id="rp-live-on" class="pill" style="background:#ECFDF5; color:#16A34A; padding:2px 9px; font-size:9px; letter-spacing:.15em; display:none">
+            <span style="width:6px; height:6px; border-radius:50%; background:#16A34A; display:inline-block; box-shadow:0 0 0 3px rgba(22,163,74,.18); animation:pulse 1.4s infinite"></span> LIVE FROM META
+          </span>
+          <span id="rp-live-off" class="pill pill-mute" style="font-size:9px; letter-spacing:.15em">offline</span>
+        </div>
+        <div class="sec-title">Daily Report · สรุปส่งลูกค้า</div>
+        <div class="sec-meta" id="rp-meta">สรุป 2 ชุด: (A) ต้นเดือน → ปัจจุบัน  (B) วันที่เลือก · พิมพ์แก้ก่อนส่ง LINE ได้</div>
+      </div>
+      <div class="chev">▾</div>
+    </summary>
+    <div class="section-body">
+      <div class="hairline mb-6"></div>
+      <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+        <div class="flex items-center gap-3 flex-wrap">
+          <span class="stamp">PERIOD</span>
+          <div class="range-pills" id="rp-presets"></div>
+        </div>
+        <div class="flex gap-2 items-center flex-wrap">
+          <input type="date" id="rp-since" class="date-input" style="border:1px solid var(--line); padding:6px 10px; border-radius:10px; font-size:12px;" />
+          <input type="date" id="rp-until" class="date-input" style="border:1px solid var(--line); padding:6px 10px; border-radius:10px; font-size:12px;" />
+          <button class="btn btn-ghost btn-sm" onclick="fetchReport()">↻ Refresh</button>
+          <button class="btn btn-ghost btn-sm" onclick="copyReport()">⎘ Copy</button>
+          <button class="btn btn-metal btn-sm" onclick="sendReport()">→ ส่ง LINE</button>
+        </div>
+      </div>
+
+      <!-- LINE preview only — combined Part A (MTD) + Part B (selected day) -->
+      <div class="rounded-2xl p-6 card-luxe card">
+        <div class="flex items-center gap-3 pb-4 border-b mb-4" style="border-color:var(--line-soft)">
+          <div class="w-12 h-12 rounded-full metal-bg flex items-center justify-center text-white font-display text-2xl lowercase">e</div>
+          <div class="flex-1">
+            <div class="font-semibold">Everly Clinic · Back Office</div>
+            <div class="text-[11px]" style="color:var(--soft)" id="rp-time">22:30 น.</div>
+          </div>
+          <span class="pill pill-rg" id="rp-period">—</span>
+        </div>
+        <div id="rp-preview" contenteditable="true" class="cell text-sm whitespace-pre-line leading-relaxed" style="min-height:300px; padding:12px; border:1px dashed transparent" oninput="state.reportCombined=this.innerText; saveState()">⏳ กดเลือกวัน หรือกด Refresh เพื่อโหลดข้อมูล</div>
+        <div class="text-[11px] mt-3" style="color:var(--soft)">💡 คลิกในข้อความเพื่อแก้ไขก่อน Copy / ส่ง LINE</div>
+      </div>
+    </div>
+  </details>
+</section>
+
+<!-- ===== FOOTER ===== -->
+<footer class="border-t" style="border-color:var(--line)">
+  <div class="max-w-[1400px] mx-auto px-8 py-12 text-center">
+    <div class="flex justify-center mb-4">
+      <div class="w-12 h-12 rounded-full metal-bg flex items-center justify-center text-white font-display text-2xl lowercase shadow-lg">e</div>
+    </div>
+    <div class="font-display tracking-[.05em] text-2xl metal lowercase">everly</div>
+    <div class="text-xs tracking-[.4em] uppercase mt-1" style="color:var(--soft)">Clinic</div>
+    <hr class="metal-line max-w-[80px] mx-auto my-5" />
+    <div class="stamp">PREPARED BY · นายหัว กรุ๊ป · MAY 2026</div>
+  </div>
+</footer>
+
+<div id="toast" class="toast"></div>
+
+<script>
+// ============= CONFIG =============
+// API base detection:
+// - If page served from port 8765 (legacy local http.server) → API on :8000
+// - Otherwise (tunnel / FastAPI serving HTML at /) → same origin (relative)
+const API_BASE = (() => {
+  const port = window.location.port;
+  if (port === '8765') {
+    return `${window.location.protocol}//${window.location.hostname}:8000`;
+  }
+  return window.location.origin;
+})();
+const STORAGE_KEY = 'everly-hub-v1';
+
+// ============= STATE =============
+const DEFAULT_STATE = {
+  reportMTD: '',
+  reportDay: '',
+  reportCombined: '',
+};
+
+let state = loadState();
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) return { ...JSON.parse(JSON.stringify(DEFAULT_STATE)), ...JSON.parse(raw) };
+  } catch(e) {}
+  return JSON.parse(JSON.stringify(DEFAULT_STATE));
+}
+let saveTimer;
+function saveState() {
+  setSaving(true);
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); setSaving(false); }, 350);
+}
+function setSaving(b) {
+  const dot = document.getElementById('saveDot'); const txt = document.getElementById('saveText');
+  if (b) { dot.classList.add('saving-dot'); txt.textContent = 'กำลังบันทึก...'; }
+  else   { dot.classList.remove('saving-dot'); txt.textContent = 'บันทึกแล้ว'; }
+}
+
+// ============= UTILS =============
+const fmt = n => '฿' + Math.round(n||0).toLocaleString('th-TH');
+const fmt2 = n => '฿' + (n||0).toLocaleString('th-TH', { minimumFractionDigits:2, maximumFractionDigits:2 });
+const fmtN = n => (n==null?'':Number(n).toLocaleString('th-TH'));
+const parseNum = s => { const n = parseFloat(String(s).replace(/[^\d.-]/g,'')); return isNaN(n)?null:n; };
+const isoToday = () => new Date(Date.now()+7*3600000).toISOString().slice(0,10);
+const isoYesterday = () => new Date(Date.now()+7*3600000 - 86400000).toISOString().slice(0,10);
+const isoNDaysAgo = (n) => new Date(Date.now()+7*3600000 - n*86400000).toISOString().slice(0,10);
+const monthStart = () => { const d = new Date(Date.now()+7*3600000); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-01`; };
+const lastMonthRange = () => {
+  const d = new Date(Date.now()+7*3600000);
+  const lastMonthEnd = new Date(d.getFullYear(), d.getMonth(), 0);
+  const lastMonthStart = new Date(d.getFullYear(), d.getMonth()-1, 1);
+  return [
+    `${lastMonthStart.getFullYear()}-${String(lastMonthStart.getMonth()+1).padStart(2,'0')}-01`,
+    `${lastMonthEnd.getFullYear()}-${String(lastMonthEnd.getMonth()+1).padStart(2,'0')}-${String(lastMonthEnd.getDate()).padStart(2,'0')}`,
+  ];
+};
+function fmtIsoBkk(date) {
+  return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;
+}
+const weekRange = () => {
+  // Monday → today (Bangkok). Sun=0 in JS, treat as last day of week.
+  const d = new Date(Date.now()+7*3600000);
+  const dow = d.getDay() === 0 ? 7 : d.getDay();
+  const monday = new Date(d.getTime() - (dow-1)*86400000);
+  return [fmtIsoBkk(monday), isoToday()];
+};
+const lastWeekRange = () => {
+  const d = new Date(Date.now()+7*3600000);
+  const dow = d.getDay() === 0 ? 7 : d.getDay();
+  const lastSunday = new Date(d.getTime() - dow*86400000);
+  const lastMonday = new Date(lastSunday.getTime() - 6*86400000);
+  return [fmtIsoBkk(lastMonday), fmtIsoBkk(lastSunday)];
+};
+const allTimeRange = () => {
+  // Earliest data per Streamlit: Feb 1 of current year
+  const d = new Date(Date.now()+7*3600000);
+  return [`${d.getFullYear()}-02-01`, isoToday()];
+};
+
+// ============= UNIFIED DATE PRESETS =============
+const DATE_PRESETS = [
+  { key:'today',     label:'วันนี้',         range: () => [isoToday(), isoToday()] },
+  { key:'yesterday', label:'เมื่อวาน',       range: () => [isoYesterday(), isoYesterday()] },
+  { key:'3d',        label:'3 วันที่แล้ว',  range: () => [isoNDaysAgo(2), isoToday()] },
+  { key:'7d',        label:'7 วันที่แล้ว',  range: () => [isoNDaysAgo(6), isoToday()] },
+  { key:'14d',       label:'14 วันที่แล้ว', range: () => [isoNDaysAgo(13), isoToday()] },
+  { key:'28d',       label:'28 วันที่แล้ว', range: () => [isoNDaysAgo(27), isoToday()] },
+  { key:'30d',       label:'30 วันที่แล้ว', range: () => [isoNDaysAgo(29), isoToday()] },
+  { key:'week',      label:'สัปดาห์นี้',     range: weekRange },
+  { key:'lastweek',  label:'สัปดาห์ที่แล้ว', range: lastWeekRange },
+  { key:'month',     label:'เดือนนี้',       range: () => [monthStart(), isoToday()] },
+  { key:'lastmonth', label:'เดือนที่แล้ว',   range: lastMonthRange },
+  { key:'all',       label:'มากที่สุด',      range: allTimeRange },
+];
+function presetPillsHTML(initialKey) {
+  return DATE_PRESETS.map(p =>
+    `<button class="range-pill ${p.key===initialKey?'on':''}" data-preset="${p.key}">${p.label}</button>`
+  ).join('') + `<button class="range-pill" data-preset="custom">กำหนดเอง</button>`;
+}
+function applyPreset(prefix, key, fetchFn) {
+  if (key === 'custom') {
+    document.querySelectorAll(`#${prefix}-presets .range-pill`).forEach(b => b.classList.toggle('on', b.dataset.preset==='custom'));
+    document.getElementById(`${prefix}-since`).focus();
+    return;
+  }
+  const preset = DATE_PRESETS.find(p => p.key === key);
+  if (!preset) return;
+  const [since, until] = preset.range();
+  document.querySelectorAll(`#${prefix}-presets .range-pill`).forEach(b => b.classList.toggle('on', b.dataset.preset===key));
+  document.getElementById(`${prefix}-since`).value = since;
+  document.getElementById(`${prefix}-until`).value = until;
+  fetchFn();
+}
+function presetDeselect(prefix) {
+  // When user manually edits date inputs, mark "custom" pill as selected
+  document.querySelectorAll(`#${prefix}-presets .range-pill`).forEach(b => b.classList.toggle('on', b.dataset.preset==='custom'));
+}
+// Single-day variant for Section 07 (Daily Report) — Part B is one specific day
+const DAY_PRESETS = [
+  { key:'today',     label:'วันนี้',        date: () => isoToday() },
+  { key:'yesterday', label:'เมื่อวาน',      date: () => isoYesterday() },
+  { key:'3d',        label:'3 วันก่อน',    date: () => isoNDaysAgo(3) },
+  { key:'7d',        label:'7 วันก่อน',    date: () => isoNDaysAgo(7) },
+  { key:'14d',       label:'14 วันก่อน',   date: () => isoNDaysAgo(14) },
+  { key:'30d',       label:'30 วันก่อน',   date: () => isoNDaysAgo(30) },
+];
+function dayPresetPillsHTML(initialKey) {
+  return DAY_PRESETS.map(p =>
+    `<button class="range-pill ${p.key===initialKey?'on':''}" data-preset="${p.key}">${p.label}</button>`
+  ).join('');
+}
+
+function toast(msg, kind='') {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.className = 'toast show' + (kind?' '+kind:'');
+  clearTimeout(window._toastT);
+  window._toastT = setTimeout(()=> t.classList.remove('show'), 1800);
+}
+
+// ============= EDITABLE FACTORIES =============
+let _hid = 0;
+const _handlers = new Map();
+function bindHandlers(root) {
+  root.querySelectorAll('[data-h]').forEach(el => {
+    const h = _handlers.get(el.dataset.h); if (!h) return;
+    if (el.tagName === 'DIV' && el.classList.contains('cell')) {
+      el.addEventListener('blur', () => { const v = el.innerText.trim();
+        if (v.length === 0) el.classList.add('empty'); else el.classList.remove('empty'); h(v); });
+    } else if (el.tagName === 'SELECT') {
+      el.addEventListener('change', () => { h(el.value); applyStatusColor(el); }); applyStatusColor(el);
+    } else if (el.tagName === 'INPUT' && el.type === 'date') {
+      el.addEventListener('change', () => h(el.value));
+    } else if (el.tagName === 'INPUT' && (el.type === 'text' || el.type === 'url')) {
+      el.addEventListener('blur', () => h(el.value.trim()));
+      el.addEventListener('keydown', (e) => { if(e.key==='Enter') el.blur(); });
+    } else if (el.classList.contains('check') || el.classList.contains('plat') || el.classList.contains('kol-plat') || el.classList.contains('kol-mini-check')) {
+      el.addEventListener('click', () => { el.classList.toggle('on'); h(el.classList.contains('on')); });
+    }
+  });
+}
+function editCell(value, key, onChange, placeholder='') {
+  const id = 'h_'+(++_hid); _handlers.set(id, onChange);
+  return `<div data-h="${id}" class="cell ${value?'':'empty'}" data-placeholder="${placeholder}" contenteditable="true">${value||''}</div>`;
+}
+function statusSelect(value, onChange) {
+  const id = 'h_'+(++_hid); _handlers.set(id, onChange);
+  return `<select data-h="${id}" class="select-input pill pill-mute">${STATUS.CONTENT.map(o => `<option ${o===value?'selected':''}>${o}</option>`).join('')}</select>`;
+}
+function applyStatusColor(sel) {
+  const v = sel.value;
+  sel.className = 'select-input';
+  // Solid bold colors that read instantly: green / amber / red
+  let bg, color, border;
+  if (v === 'พร้อมใช้งาน')        { bg = '#16A34A'; color = '#FFFFFF'; border = '#15803D'; }
+  else if (v === 'รอหมอตรวจ')     { bg = '#EAB308'; color = '#FFFFFF'; border = '#CA8A04'; }
+  else if (v === 'ไม่พร้อมใช้งาน') { bg = '#DC2626'; color = '#FFFFFF'; border = '#B91C1C'; }
+  else                              { bg = 'var(--cream)'; color = 'var(--soft)'; border = 'var(--line)'; }
+  sel.style.background = bg;
+  sel.style.color = color;
+  sel.style.border = `1px solid ${border}`;
+  sel.style.borderRadius = '999px';
+  sel.style.padding = '5px 14px';
+  sel.style.fontSize = '11px';
+  sel.style.fontWeight = '700';
+  sel.style.letterSpacing = '.04em';
+  sel.style.textAlign = 'center';
+  sel.style.width = '100%';
+}
+function dateInput(value, onChange) {
+  const id = 'h_'+(++_hid); _handlers.set(id, onChange);
+  return `<input type="date" data-h="${id}" class="date-input" value="${value||''}" />`;
+}
+function urlInput(value, onChange, placeholder='') {
+  const id = 'h_'+(++_hid); _handlers.set(id, onChange);
+  return `<input type="url" data-h="${id}" class="url-input" value="${value||''}" placeholder="${placeholder}" />`;
+}
+function checkBox(value, onChange) {
+  const id = 'h_'+(++_hid); _handlers.set(id, onChange);
+  return `<div data-h="${id}" class="check ${value?'on':''}" style="margin:0 auto"></div>`;
+}
+function platBtn(iconId, label, value, onChange) {
+  const id = 'h_'+(++_hid); _handlers.set(id, onChange);
+  return `<div data-h="${id}" class="plat ${value?'on':''}"><svg><use href="#${iconId}"/></svg>${label}</div>`;
+}
+
+// ============= API =============
+async function checkApiHealth() {
+  try {
+    const res = await fetch(API_BASE + '/api/health', { cache:'no-store' });
+    if (!res.ok) return false;
+    const j = await res.json(); return j.ok && j.has_token;
+  } catch { return false; }
+}
+async function apiGet(path) {
+  const res = await fetch(API_BASE + path, { cache:'no-store' });
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  return res.json();
+}
+function setLive(prefix, on) {
+  const onEl = document.getElementById(prefix+'-live-on'); const offEl = document.getElementById(prefix+'-live-off');
+  if (onEl) onEl.style.display = on ? '' : 'none';
+  if (offEl) offEl.style.display = on ? 'none' : '';
+}
+
+// ============= SECTION 01 — OVERVIEW =============
+let _overviewLoaded = false;
+function overviewPresetClick(preset) { applyPreset('ov', preset, fetchOverview); }
+async function fetchOverview() {
+  const meta = document.getElementById('ov-meta');
+  const periodEl = document.getElementById('ov-period');
+  const updatedEl = document.getElementById('ov-updated');
+  const since = document.getElementById('ov-since').value;
+  const until = document.getElementById('ov-until').value;
+  if (!since || !until) {
+    document.getElementById('ov-since').value = monthStart();
+    document.getElementById('ov-until').value = isoToday();
+    return fetchOverview();
+  }
+  meta.textContent = '⏳ กำลังดึงจาก Meta API...';
+  periodEl.textContent = '...';
+  try {
+    const j = await apiGet(`/api/everly/summary?since=${since}&until=${until}`);
+    const t = j.totals;
+    document.getElementById('ov-spend').textContent = fmt(t.spend);
+    document.getElementById('ov-spend-sub').textContent = `${j.n_days} วัน · เฉลี่ย ${fmt(t.avg_daily_spend)}/วัน`;
+    document.getElementById('ov-revenue').textContent = fmt(t.revenue);
+    document.getElementById('ov-roas').innerHTML = t.roas.toFixed(2) + '<span style="font-size:.55em; color:var(--gold); margin-left:4px">x</span>';
+    document.getElementById('ov-roas-sub').innerHTML = `เป้า 10x · ปัจจุบัน <b style="color:var(--rg-deep)">${t.roas_pct_of_target.toFixed(0)}%</b>`;
+    document.getElementById('ov-inbox').textContent = fmtN(t.result);
+    document.getElementById('ov-cpi').textContent = fmt(t.cost_per_result);
+    document.getElementById('ov-freq').innerHTML = t.frequency.toFixed(2) + '<span style="font-size:.55em; color:var(--gold); margin-left:4px">x</span>';
+    document.getElementById('ov-impr').textContent = fmtN(t.impressions);
+    document.getElementById('ov-reach').textContent = fmtN(t.reach);
+    const netEl = document.getElementById('ov-net');
+    netEl.textContent = (t.net >= 0 ? '' : '−') + '฿' + Math.abs(Math.round(t.net)).toLocaleString('th-TH');
+    netEl.style.color = t.net >= 0 ? 'var(--sage)' : 'var(--dusty)';
+    const fmtThai = (iso) => { const d = new Date(iso); return d.toLocaleDateString('th-TH',{day:'numeric',month:'short',year:'2-digit'}); };
+    periodEl.textContent = `${fmtThai(j.since)} → ${fmtThai(j.until)} · ${j.n_days} วัน`;
+    const ft = new Date(j.fetched_at);
+    updatedEl.textContent = ft.toLocaleString('th-TH',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) + ' น.';
+    meta.textContent = 'ดึงสดจาก Meta Marketing API · cache 10 นาที';
+    setLive('ov', true); _overviewLoaded = true;
+    renderSpendChart(j.days);
+    toast('↻ Overview refreshed', 'save');
+  } catch (e) {
+    setLive('ov', false);
+    meta.innerHTML = `⚠️ เชื่อม API ไม่ได้ — เปิด terminal: <code style="background:var(--cream); padding:2px 6px; border-radius:4px">cd /Users/fadiion/Desktop/Code/ads-report && .venv/bin/python api_server.py</code>`;
+  }
+}
+let spendChart;
+function renderSpendChart(days) {
+  const ctx = document.getElementById('spendChart').getContext('2d');
+  const labels = days.map(d => { const dt = new Date(d.date); return dt.toLocaleDateString('en-GB',{day:'numeric',month:'short'}); });
+  const data = days.map(d => +(d.spent||0).toFixed(2));
+  if (spendChart) spendChart.destroy();
+  spendChart = new Chart(ctx, {
+    type:'line',
+    data:{ labels, datasets:[{ label:'Spend', data, borderColor:'#9C5F66',
+      backgroundColor:(c)=>{ const g=c.chart.ctx.createLinearGradient(0,0,0,240); g.addColorStop(0,'rgba(122,79,58,.32)'); g.addColorStop(1,'rgba(122,79,58,0)'); return g; },
+      fill:true, tension:.4, borderWidth:2, pointBackgroundColor:'#fff', pointBorderColor:'#9C5F66', pointBorderWidth:1.5, pointRadius:0, pointHoverRadius:5 }] },
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{display:false}, tooltip:{ backgroundColor:'#3A2A2E', padding:10, cornerRadius:8, callbacks:{ label: c=> '฿' + Number(c.raw).toLocaleString('th-TH',{maximumFractionDigits:0}) } } },
+      scales:{ x:{ grid:{display:false}, ticks:{color:'#A89499', font:{size:10}, maxTicksLimit:18 } },
+               y:{ grid:{color:'#F5E5DE'}, ticks:{color:'#A89499', font:{size:10}, callback:v => '฿'+(v>=1000?(v/1000)+'k':v) }, beginAtZero:true } } }
+  });
+}
+
+// ============= SECTION 02 — DAILY OPERATIONS (range-based) =============
+function dailyPresetClick(preset) { applyPreset('dy', preset, fetchDailyRange); }
+async function fetchDailyRange() {
+  const since = document.getElementById('dy-since').value;
+  const until = document.getElementById('dy-until').value;
+  if (!since || !until) return;
+  document.getElementById('dy-content').innerHTML = '<div class="card p-8 text-center" style="color:var(--soft)">⏳ กำลังโหลด ' + since + ' → ' + until + '...</div>';
+  try {
+    const [summary, top] = await Promise.all([
+      apiGet(`/api/everly/summary?since=${since}&until=${until}`),
+      apiGet(`/api/everly/top-ads-range?since=${since}&until=${until}&limit=10`),
+    ]);
+    setLive('dy', true);
+    renderDailyRange(since, until, summary.totals, summary.n_days, top.ads || []);
+  } catch (e) {
+    setLive('dy', false);
+    document.getElementById('dy-content').innerHTML = '<div class="card p-8 text-center" style="color:var(--dusty)">⚠️ เชื่อม API ไม่ได้</div>';
+  }
+}
+function renderDailyRange(since, until, t, nDays, ads) {
+  const fmtThai = (iso) => { const d = new Date(iso); return d.toLocaleDateString('th-TH',{weekday:'short',day:'numeric',month:'short',year:'2-digit'}); };
+  const isOneDay = since === until;
+  const headerTitle = isOneDay ? fmtThai(since) : `${fmtThai(since)} → ${fmtThai(until)}`;
+  const sortedAds = sortAdsByROAS(ads);
+  const adsHtml = sortedAds.map((a,i) => {
+    const medals = ['🥇','🥈','🥉','④','⑤','⑥','⑦','⑧','⑨','⑩'];
+    const cpi = a.result>0 ? Math.round(a.cost_per_result) : '—';
+    const roasStr = a.roas > 0 ? a.roas.toFixed(2) + 'x' : '—';
+    const roasColor = a.roas >= 10 ? 'var(--sage)' : a.roas > 0 ? 'var(--rg-deep)' : 'var(--gray)';
+    return `<div class="card p-4 flex items-center gap-4">
+      <div style="width:40px; text-align:center; font-size:${i<3?'24px':'18px'}; color:${i<3?'var(--rg-deepest)':'var(--soft)'}">${medals[i]||'·'}</div>
+      <div class="flex-1 min-w-0">
+        <div class="font-semibold truncate">${a.campaign}</div>
+        <div class="text-xs mt-1" style="color:var(--soft)">${a.result} inbox · ${fmt(a.spent)} · CPM ฿${a.cpm.toFixed(0)}</div>
+      </div>
+      <div class="text-right">
+        <div class="num" style="color:${roasColor}; font-size:20px; font-weight:700">${roasStr}</div>
+        <div class="text-[10px] uppercase tracking-widest" style="color:var(--soft)">ROAS · ฿${cpi}/inbox</div>
+      </div>
+    </div>`;
+  }).join('') || '<div class="text-sm text-center py-6" style="color:var(--soft)">ไม่มีแอดในช่วงนี้</div>';
+
+  document.getElementById('dy-content').innerHTML = `
+    <div class="text-center mb-6">
+      <div class="stamp" style="color:var(--rg-deep)">SMART BOARD · ${nDays} ${isOneDay?'วัน':'วัน'}</div>
+      <div class="font-serif text-3xl mt-1" style="color:var(--rg-deepest)">${headerTitle}</div>
+    </div>
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div class="kpi-mini"><div class="kpi-label">Spend</div><div class="kpi-value num">${fmt(t.spend)}</div><div class="kpi-sub">เฉลี่ย ${fmt(t.avg_daily_spend)}/วัน</div></div>
+      <div class="kpi-mini"><div class="kpi-label">Inbox</div><div class="kpi-value num">${fmtN(t.result)}</div></div>
+      <div class="kpi-mini"><div class="kpi-label">฿ / Inbox</div><div class="kpi-value num">${fmt(t.cost_per_result)}</div></div>
+      <div class="kpi-mini"><div class="kpi-label">ROAS</div><div class="kpi-value num">${t.roas.toFixed(2)}<span style="font-size:.5em; color:var(--gold); margin-left:3px">x</span></div></div>
+    </div>
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
+      <div class="kpi-mini"><div class="kpi-label">Revenue</div><div class="kpi-value num">${fmt(t.revenue)}</div></div>
+      <div class="kpi-mini"><div class="kpi-label">Impressions</div><div class="kpi-value num">${fmtN(t.impressions)}</div></div>
+      <div class="kpi-mini"><div class="kpi-label">Reach</div><div class="kpi-value num">${fmtN(t.reach)}</div></div>
+      <div class="kpi-mini"><div class="kpi-label">Frequency</div><div class="kpi-value num">${t.frequency.toFixed(2)}<span style="font-size:.5em; color:var(--gold); margin-left:3px">x</span></div></div>
+    </div>
+    <div class="mt-6">
+      <div class="font-serif text-xl mb-3" style="color:var(--rg-deepest)">🌹 Top Ads · เรียงตาม ROAS สูงสุด</div>
+      <div class="space-y-2">${adsHtml}</div>
+    </div>
+  `;
+}
+// Sort: ROAS desc primary; tie-break by inbox count desc (more inbox = stronger);
+// ads with ROAS=0 fall to the bottom but still ordered by inbox to surface real performers
+function sortAdsByROAS(ads) {
+  return [...ads].sort((a,b) => {
+    if ((b.roas||0) !== (a.roas||0)) return (b.roas||0) - (a.roas||0);
+    if ((b.result||0) !== (a.result||0)) return (b.result||0) - (a.result||0);
+    return (a.cost_per_result||9e9) - (b.cost_per_result||9e9);
+  });
+}
+
+// ============= SECTION 03 — TOP HIGHLIGHTS =============
+async function fetchTopRange(updateInputs=false) {
+  const since = document.getElementById('tp-since').value;
+  const until = document.getElementById('tp-until').value;
+  if (!since || !until) return;
+  document.getElementById('tp-content').innerHTML = '<div class="card p-8 text-center" style="color:var(--soft)">⏳ กำลังโหลด ' + since + ' → ' + until + '...</div>';
+  try {
+    const [summary, top] = await Promise.all([
+      apiGet(`/api/everly/summary?since=${since}&until=${until}`),
+      apiGet(`/api/everly/top-ads-range?since=${since}&until=${until}&limit=10`),
+    ]);
+    setLive('tp', true);
+    renderTopRange(since, until, summary.totals, top.ads || []);
+  } catch (e) {
+    setLive('tp', false);
+    document.getElementById('tp-content').innerHTML = '<div class="card p-8 text-center" style="color:var(--dusty)">⚠️ เชื่อม API ไม่ได้</div>';
+  }
+}
+function renderTopRange(since, until, totals, ads) {
+  const fmtThai = (iso) => { const d = new Date(iso); return d.toLocaleDateString('th-TH',{day:'numeric',month:'short'}); };
+  const sortedAds = sortAdsByROAS(ads);
+  const adsHtml = sortedAds.map((a,i) => {
+    const medals = ['🥇','🥈','🥉','④','⑤','⑥','⑦','⑧','⑨','⑩'];
+    const cpi = a.result>0 ? Math.round(a.cost_per_result) : '—';
+    const roasStr = a.roas > 0 ? a.roas.toFixed(2) + 'x' : '—';
+    const roasColor = a.roas >= 10 ? 'var(--sage)' : a.roas > 0 ? 'var(--rg-deep)' : 'var(--gray)';
+    return `<div class="card p-4 flex items-center gap-4">
+      <div style="width:40px; text-align:center; font-size:${i<3?'24px':'18px'}; color:${i<3?'var(--rg-deepest)':'var(--soft)'}">${medals[i]||'·'}</div>
+      <div class="flex-1 min-w-0">
+        <div class="font-semibold truncate">${a.campaign}</div>
+        <div class="text-xs mt-1" style="color:var(--soft)">${a.result} inbox · ${fmt(a.spent)} · CPM ฿${a.cpm.toFixed(0)}</div>
+      </div>
+      <div class="text-right">
+        <div class="num" style="color:${roasColor}; font-size:20px; font-weight:700">${roasStr}</div>
+        <div class="text-[10px] uppercase tracking-widest" style="color:var(--soft)">ROAS · ฿${cpi}/inbox</div>
+      </div>
+    </div>`;
+  }).join('') || '<div class="text-sm text-center py-6" style="color:var(--soft)">ไม่มีแอดในช่วงนี้</div>';
+
+  document.getElementById('tp-content').innerHTML = `
+    <div class="text-center mb-6">
+      <div class="stamp" style="color:var(--rg-deep)">PERIOD SMART BOARD</div>
+      <div class="font-serif text-3xl mt-1" style="color:var(--rg-deepest)">${fmtThai(since)} → ${fmtThai(until)}</div>
+    </div>
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div class="kpi-mini"><div class="kpi-label">Spend</div><div class="kpi-value num">${fmt(totals.spend)}</div></div>
+      <div class="kpi-mini"><div class="kpi-label">Inbox</div><div class="kpi-value num">${fmtN(totals.result)}</div></div>
+      <div class="kpi-mini"><div class="kpi-label">฿ / Inbox</div><div class="kpi-value num">${fmt(totals.cost_per_result)}</div></div>
+      <div class="kpi-mini"><div class="kpi-label">ROAS</div><div class="kpi-value num">${totals.roas.toFixed(2)}<span style="font-size:.5em; color:var(--gold); margin-left:3px">x</span></div></div>
+    </div>
+    <div class="mt-6">
+      <div class="font-serif text-xl mb-3" style="color:var(--rg-deepest)">🌹 Top ${sortedAds.length} แอด · เรียงตาม ROAS สูงสุด</div>
+      <div class="space-y-2">${adsHtml}</div>
+    </div>
+  `;
+}
+function topPresetClick(preset) { applyPreset('tp', preset, fetchTopRange); }
+
+// ============= SECTION 04 — MONTH-OVER-MONTH TREND =============
+let trendChart;
+const MONTH_TH = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+const MONTH_FULL_TH = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
+function aggregateByMonth(days) {
+  const m = {};
+  days.forEach(d => {
+    const key = d.date.slice(0,7); // YYYY-MM
+    if (!m[key]) m[key] = { key, spend:0, result:0, conv:0, impr:0, reach:0, n:0 };
+    m[key].spend += d.spent || 0;
+    m[key].result += d.result || 0;
+    m[key].conv += d.conversion || 0;
+    m[key].impr += d.impression || 0;
+    m[key].reach += d.reach || 0;
+    m[key].n += 1;
+  });
+  return Object.values(m).sort((a,b) => a.key.localeCompare(b.key)).map(x => ({
+    ...x,
+    monthIdx: parseInt(x.key.slice(5,7),10) - 1,
+    year: parseInt(x.key.slice(0,4),10),
+    roas: x.spend>0 ? x.conv/x.spend : 0,
+    cpi: x.result>0 ? x.spend/x.result : 0,
+  }));
+}
+function deltaPct(curr, prev) {
+  if (!prev) return null;
+  return (curr - prev) / prev * 100;
+}
+function deltaHTML(curr, prev, invert=false) {
+  const p = deltaPct(curr, prev);
+  if (p === null || Math.abs(p) < 0.5) return `<span style="color:var(--gray)">—</span>`;
+  const isUp = p > 0;
+  const isGood = invert ? !isUp : isUp;
+  const color = isGood ? 'var(--sage)' : 'var(--dusty)';
+  const arrow = isUp ? '▲' : '▼';
+  return `<span style="color:${color}; font-weight:600">${arrow} ${Math.abs(p).toFixed(1)}%</span>`;
+}
+async function fetchTrend() {
+  try {
+    const j = await apiGet('/api/everly/summary');
+    setLive('tr', true);
+    const months = aggregateByMonth(j.days);
+    renderMonthCards(months);
+    renderMonthChart(months);
+    renderSpendRevChart(months);
+  } catch (e) { setLive('tr', false); }
+}
+let spendRevChart;
+function renderSpendRevChart(months) {
+  const ctx = document.getElementById('spendRevChart').getContext('2d');
+  const labels = months.map(m => MONTH_FULL_TH[m.monthIdx]);
+  const spendData = months.map(m => Math.round(m.spend));
+  const revData = months.map(m => Math.round(m.conv));
+  if (spendRevChart) spendRevChart.destroy();
+  spendRevChart = new Chart(ctx, {
+    type:'bar',
+    data:{ labels, datasets:[
+      { label:'Spend', data: spendData, backgroundColor:'#9C5F66', borderRadius:8, borderSkipped:false, maxBarThickness:42 },
+      { label:'Revenue', data: revData, backgroundColor:'#D4A8A8', borderRadius:8, borderSkipped:false, maxBarThickness:42 },
+    ]},
+    options:{ responsive:true, maintainAspectRatio:false,
+      layout:{ padding:{top:30} },
+      plugins:{
+        legend:{display:false},
+        tooltip:{ backgroundColor:'#3A2A2E', padding:12, cornerRadius:10, callbacks:{
+          label: ctx => ctx.dataset.label + ': ฿' + Number(ctx.raw).toLocaleString('th-TH'),
+          afterLabel: ctx => {
+            if (ctx.datasetIndex !== 1) return '';
+            const m = months[ctx.dataIndex];
+            const net = m.conv - m.spend;
+            return [`Net: ${net>=0?'+':''}฿${Math.round(net).toLocaleString('th-TH')}`, `ROAS: ${m.roas.toFixed(2)}x`];
+          }
+        } },
+        valueLabel: { color:'#3A2A2E', formatter: v => '฿' + Number(v).toLocaleString('th-TH') }
+      },
+      scales:{ x:{ grid:{display:false}, ticks:{color:'#A89499', font:{size:11}} },
+               y:{ grid:{color:'#F5E5DE'}, ticks:{color:'#A89499', font:{size:11}, callback:v => '฿'+(v>=1000?(v/1000).toFixed(0)+'k':v) }, beginAtZero:true } }
+    },
+    plugins:[valueLabelPlugin]
+  });
+}
+function renderMonthCards(months) {
+  const cardsEl = document.getElementById('tr-cards');
+  cardsEl.innerHTML = months.map((m, i) => {
+    const prev = i>0 ? months[i-1] : null;
+    const isLatest = i === months.length - 1;
+    const cardCls = isLatest
+      ? 'kpi card-luxe' : 'kpi';
+    const titleColor = isLatest ? 'var(--rg-deepest)' : 'var(--rg-deep)';
+    return `<div class="${cardCls}" style="padding:18px">
+      <div class="stamp" style="color:${titleColor}; margin-bottom:6px">${MONTH_FULL_TH[m.monthIdx]} ${m.year+543-2026+2569}</div>
+      <div class="font-serif text-2xl" style="color:var(--rg-deepest); line-height:1">${MONTH_TH[m.monthIdx]} ${String(m.year).slice(2)}</div>
+      <div class="text-[10px] mt-1" style="color:var(--soft)">${m.n} วัน</div>
+      <div class="mt-3 space-y-1.5 text-xs">
+        <div class="flex justify-between"><span style="color:var(--soft)">ใช้จ่าย</span><span class="num font-semibold">${fmt(m.spend)} ${prev?deltaHTML(m.spend, prev.spend):''}</span></div>
+        <div class="flex justify-between"><span style="color:var(--soft)">Inbox</span><span class="num font-semibold">${fmtN(m.result)} ${prev?deltaHTML(m.result, prev.result):''}</span></div>
+        <div class="flex justify-between"><span style="color:var(--soft)">รายได้</span><span class="num font-semibold">${fmt(m.conv)} ${prev?deltaHTML(m.conv, prev.conv):''}</span></div>
+        <div class="flex justify-between"><span style="color:var(--soft)">ROAS</span><span class="num font-semibold" style="color:${m.roas>=10?'var(--sage)':'var(--rg-deepest)'}">${m.roas.toFixed(2)}x ${prev?deltaHTML(m.roas, prev.roas):''}</span></div>
+        <div class="flex justify-between"><span style="color:var(--soft)">฿/Inbox</span><span class="num font-semibold">${fmt(m.cpi)} ${prev?deltaHTML(m.cpi, prev.cpi, true):''}</span></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+// Inline plugin: draws value labels above data points / bars
+const valueLabelPlugin = {
+  id: 'valueLabel',
+  afterDatasetsDraw(chart, args, opts) {
+    const { ctx } = chart;
+    chart.data.datasets.forEach((ds, di) => {
+      if (ds.label === 'Target') return;
+      const fmtFn = opts.formatter || (v => v);
+      const meta = chart.getDatasetMeta(di);
+      meta.data.forEach((pt, i) => {
+        const v = ds.data[i];
+        if (v == null) return;
+        ctx.save();
+        ctx.fillStyle = opts.color || '#3A2A2E';
+        ctx.font = (opts.fontWeight || '600') + ' 11px Inter, system-ui';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText(fmtFn(v), pt.x, pt.y - 8);
+        ctx.restore();
+      });
+    });
+  }
+};
+function renderMonthChart(months) {
+  const ctx = document.getElementById('trendChart').getContext('2d');
+  const labels = months.map(m => `${MONTH_FULL_TH[m.monthIdx]}`);
+  const data = months.map(m => +m.roas.toFixed(2));
+  if (trendChart) trendChart.destroy();
+  trendChart = new Chart(ctx, {
+    type:'line',
+    data:{ labels, datasets:[
+      { label:'ROAS', data, borderColor:'#9C5F66',
+        backgroundColor:(c)=>{ const g=c.chart.ctx.createLinearGradient(0,0,0,260); g.addColorStop(0,'rgba(122,79,58,.32)'); g.addColorStop(1,'rgba(122,79,58,0)'); return g; },
+        fill:true, tension:.4, borderWidth:3,
+        pointBackgroundColor:'#9C5F66', pointBorderColor:'#fff', pointBorderWidth:2.5,
+        pointRadius:7, pointHoverRadius:9 },
+      { type:'line', label:'Target', data: labels.map(()=>10), borderColor:'#C9A876', borderDash:[6,6], borderWidth:1.5, pointRadius:0, fill:false }
+    ]},
+    options:{ responsive:true, maintainAspectRatio:false,
+      layout:{ padding:{top:24, right:30, left:8} },
+      plugins:{
+        legend:{display:false},
+        tooltip:{ backgroundColor:'#3A2A2E', padding:12, cornerRadius:10, callbacks:{
+          label: ctx => ctx.dataset.label + ': ' + ctx.raw.toFixed(2) + 'x',
+          afterLabel: ctx => {
+            if (ctx.datasetIndex !== 0) return '';
+            const m = months[ctx.dataIndex];
+            return [`Spend: ${fmt(m.spend)}`, `Inbox: ${fmtN(m.result)}`, `Revenue: ${fmt(m.conv)}`];
+          }
+        } },
+        valueLabel: { color:'#9C5F66', formatter: v => v.toFixed(2)+'x' }
+      },
+      scales:{ x:{ grid:{display:false}, ticks:{color:'#A89499', font:{size:11}} },
+               y:{ grid:{color:'#F5E5DE'}, ticks:{color:'#A89499', font:{size:11}, callback:v=>v+'x'}, beginAtZero:true,
+                   max: Math.max(12, Math.ceil(Math.max(...data, 10))+2) } }
+    },
+    plugins:[valueLabelPlugin]
+  });
+}
+
+// ============= SECTION 05 — DAILY REPORT (range-aware) =============
+function reportPresetClick(preset) { applyPreset('rp', preset, fetchReport); }
+// Doctor-friendly simple Thai format (no emojis, no jargon)
+const THAI_MONTHS = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน','กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
+function thaiDate(d) { return `${d.getDate()} ${THAI_MONTHS[d.getMonth()]} ${d.getFullYear()}`; }
+function thaiRange(d1, d2) {
+  if (d1.getFullYear() === d2.getFullYear() && d1.getMonth() === d2.getMonth())
+    return `${d1.getDate()}–${d2.getDate()} ${THAI_MONTHS[d1.getMonth()]} ${d1.getFullYear()}`;
+  if (d1.getFullYear() === d2.getFullYear())
+    return `${d1.getDate()} ${THAI_MONTHS[d1.getMonth()]} – ${d2.getDate()} ${THAI_MONTHS[d2.getMonth()]} ${d1.getFullYear()}`;
+  return `${d1.getDate()} ${THAI_MONTHS[d1.getMonth()]} ${d1.getFullYear()} – ${d2.getDate()} ${THAI_MONTHS[d2.getMonth()]} ${d2.getFullYear()}`;
+}
+function fmtPL(profit) {
+  if (profit < 0) return `-฿${Math.abs(Math.round(profit)).toLocaleString('th-TH')}`;
+  if (profit > 0) return `+฿${Math.round(profit).toLocaleString('th-TH')}`;
+  return '฿0';
+}
+function buildSimpleReport(selDate, selSpend, selInbox, mt, nDays, mConv) {
+  const d = new Date(selDate);
+  const monthStartD = new Date(d.getFullYear(), d.getMonth(), 1);
+  const todayTh = thaiDate(d);
+  const rangeTh = thaiRange(monthStartD, d);
+  const selCpr = selInbox > 0 ? Math.round(selSpend/selInbox) : 0;
+  const mCpr = mt.result > 0 ? Math.round(mt.cost_per_result) : 0;
+  const avgDaily = Math.round(mt.avg_daily_spend || (nDays > 0 ? mt.spend/nDays : 0));
+  const profit = (mt.revenue || 0) - (mt.spend || 0);
+
+  const L = [];
+  L.push('EVERLY CLINIC — DAILY REPORT');
+  L.push(`Report ประจำวัน  (${todayTh})`);
+  L.push('');
+  L.push('ผลลัพธ์วันนี้');
+  L.push(`ใช้เงิน: ฿${selSpend.toLocaleString('th-TH',{minimumFractionDigits:2, maximumFractionDigits:2})}`);
+  L.push(`คนทัก: ${selInbox} คน`);
+  L.push(selInbox > 0 ? `เฉลี่ยต่อคนทัก: ฿${selCpr.toLocaleString('th-TH')}` : 'เฉลี่ยต่อคนทัก: —');
+  L.push('');
+  L.push('============');
+  L.push('');
+  L.push(`Report สะสมตั้งแต่ต้นเดือน – ปัจจุบัน (${rangeTh})`);
+  L.push('');
+  L.push('ภาพรวม');
+  L.push(`ใช้เงินรวม: ฿${Math.round(mt.spend).toLocaleString('th-TH')}`);
+  L.push(`เฉลี่ยต่อวัน: ฿${avgDaily.toLocaleString('th-TH')}`);
+  L.push('');
+  L.push(`คนทักรวม: ${mt.result} คน`);
+  L.push(mt.result > 0 ? `เฉลี่ยต่อคนทัก: ฿${mCpr.toLocaleString('th-TH')}` : 'เฉลี่ยต่อคนทัก: —');
+  L.push('');
+  L.push(`ยอดขาย: ฿${Math.round(mConv).toLocaleString('th-TH')}`);
+  L.push(`กำไร/ขาดทุน: ${fmtPL(profit)}`);
+  L.push('');
+  L.push('============');
+  return L.join('\n');
+}
+async function fetchReport() {
+  const since = document.getElementById('rp-since').value;
+  const until = document.getElementById('rp-until').value;
+  if (!since || !until) return;
+  const periodEl = document.getElementById('rp-period');
+  const previewEl = document.getElementById('rp-preview');
+  periodEl.textContent = 'LOADING';
+  previewEl.textContent = '⏳ กำลังดึงข้อมูลจาก Meta API...';
+  try {
+    const today = isoToday();
+    const mStart = monthStart();
+    // Always fetch month-to-date totals + selected range totals
+    const isOneDay = since === until;
+    const calls = [
+      apiGet(`/api/everly/summary?since=${mStart}&until=${today}`),
+      apiGet(`/api/everly/summary?since=${since}&until=${until}`),
+    ];
+    const [mtdSummary, selSummary] = await Promise.all(calls);
+    setLive('rp', true);
+
+    const mt = mtdSummary.totals;
+    const st = selSummary.totals;
+    // For "selected" line: if 1 day = that day's spend; if range = sum of range
+    const combined = buildSimpleReport(
+      isOneDay ? since : until,         // headline date = end of range
+      st.spend,                          // selected spend
+      st.result,                         // selected inbox
+      mt,                                // month-to-date totals
+      mtdSummary.n_days,                 // days count for month
+      mt.revenue,                        // month revenue
+    );
+    state.reportCombined = combined;
+    previewEl.textContent = combined;
+    saveState();
+
+    const fmtThai = (iso) => new Date(iso).toLocaleDateString('th-TH',{day:'numeric',month:'short'});
+    periodEl.textContent = isOneDay ? `${fmtThai(since)}` : `${fmtThai(since)} → ${fmtThai(until)}`;
+    document.getElementById('rp-time').textContent = `อัพเดท ${new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'})} น.`;
+    document.getElementById('rp-meta').textContent = `ดึงสดจาก Meta · กรอบสีชมพูแก้ไขได้ · cache 10 นาที`;
+    toast('↻ Report refreshed', 'save');
+  } catch (e) {
+    setLive('rp', false);
+    previewEl.textContent = '⚠️ เชื่อม API ไม่ได้';
+    document.getElementById('rp-period').textContent = 'OFFLINE';
+  }
+}
+function copyReport() {
+  const t = document.getElementById('rp-preview').innerText;
+  navigator.clipboard.writeText(t);
+  toast('⎘ คัดลอกแล้ว · พร้อมวางใน LINE', 'save');
+}
+async function sendReport() {
+  const txt = document.getElementById('rp-preview').innerText;
+  if (!txt || txt.startsWith('⏳') || txt.startsWith('⚠️')) {
+    toast('ยังไม่มีข้อความ — กด Refresh ก่อน');
+    return;
+  }
+  // Try to push to "หลังบ้านของมีม" group via API (LINE Messaging API)
+  try {
+    const status = await apiGet('/api/line/status');
+    if (status.configured) {
+      // Auto-send to configured group
+      const res = await fetch(API_BASE + '/api/line/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: txt }),
+      });
+      if (res.ok) {
+        toast('✓ ส่งเข้ากลุ่ม "หลังบ้านของมีม" แล้ว 🎉', 'save');
+        return;
+      }
+      const err = await res.json().catch(() => ({}));
+      toast('✗ ส่งไม่สำเร็จ: ' + (err.detail || res.status));
+      return;
+    }
+  } catch (e) { /* fall through to share */ }
+  // Fallback: open LINE share dialog (user picks contact/group manually)
+  const url = 'https://line.me/R/share?text=' + encodeURIComponent(txt);
+  window.open(url, '_blank');
+  toast('→ เปิด LINE share · เลือกกลุ่มเอง (LINE Bot ยังไม่ได้ setup)', 'save');
+}
+
+// ============= SECTION TOGGLE — auto-fetch on first open =============
+const _loaded = {};
+async function onSectionToggle(name, details) {
+  if (!details.open) return;
+  if (_loaded[name]) return;
+  const ok = await checkApiHealth();
+  if (!ok) {
+    setLive(name==='overview'?'ov':name==='daily'?'dy':name==='top'?'tp':name==='trend'?'tr':'rp', false);
+    return;
+  }
+  _loaded[name] = true;
+  if (name==='overview') fetchOverview();
+  else if (name==='daily') fetchDay();
+  else if (name==='top') fetchTopRange();
+  else if (name==='trend') fetchTrend();
+  else if (name==='report') fetchReport();
+}
+
+async function refreshAllLive() {
+  toast('↻ Refreshing all live data...');
+  await Promise.all([fetchOverview(), fetchDailyRange(), fetchTopRange(), fetchTrend(), fetchReport()]);
+  toast('✓ All sections refreshed', 'save');
+}
+
+// ============= GLOBAL =============
+function exportJSON() {
+  const blob = new Blob([JSON.stringify(state, null, 2)], { type:'application/json' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = 'glow-action-plan-may2026.json'; a.click();
+  toast('⬇ Export', 'save');
+}
+function resetAll() {
+  if (!confirm('Reset ทุกข้อมูลกลับ default?')) return;
+  localStorage.removeItem(STORAGE_KEY);
+  state = JSON.parse(JSON.stringify(DEFAULT_STATE));
+  renderAll(); toast('↺ Reset แล้ว');
+}
+
+function renderAll() {
+  if (state.reportCombined) {
+    document.getElementById('rp-preview').textContent = state.reportCombined;
+  }
+}
+
+// ============= INIT =============
+(function init() {
+  const today = isoToday();
+
+  // Populate preset pill HTML for all sections (same 13 presets everywhere)
+  document.getElementById('ov-presets').innerHTML = presetPillsHTML('month');
+  document.getElementById('dy-presets').innerHTML = presetPillsHTML('today');
+  document.getElementById('tp-presets').innerHTML = presetPillsHTML('7d');
+  document.getElementById('rp-presets').innerHTML = presetPillsHTML('yesterday');
+
+  // Initial date pickers
+  document.getElementById('ov-since').value = monthStart();
+  document.getElementById('ov-until').value = today;
+  document.getElementById('dy-since').value = today;
+  document.getElementById('dy-until').value = today;
+  document.getElementById('tp-since').value = isoNDaysAgo(6);
+  document.getElementById('tp-until').value = today;
+  document.getElementById('rp-since').value = isoYesterday();
+  document.getElementById('rp-until').value = isoYesterday();
+
+  // Wire preset buttons (delegated since HTML was just populated)
+  document.querySelectorAll('#ov-presets .range-pill').forEach(b => b.addEventListener('click', () => overviewPresetClick(b.dataset.preset)));
+  document.querySelectorAll('#dy-presets .range-pill').forEach(b => b.addEventListener('click', () => dailyPresetClick(b.dataset.preset)));
+  document.querySelectorAll('#tp-presets .range-pill').forEach(b => b.addEventListener('click', () => topPresetClick(b.dataset.preset)));
+  document.querySelectorAll('#rp-presets .range-pill').forEach(b => b.addEventListener('click', () => reportPresetClick(b.dataset.preset)));
+
+  // Wire date inputs
+  document.getElementById('ov-since').addEventListener('change', () => { presetDeselect('ov'); fetchOverview(); });
+  document.getElementById('ov-until').addEventListener('change', () => { presetDeselect('ov'); fetchOverview(); });
+  document.getElementById('dy-since').addEventListener('change', () => { presetDeselect('dy'); fetchDailyRange(); });
+  document.getElementById('dy-until').addEventListener('change', () => { presetDeselect('dy'); fetchDailyRange(); });
+  document.getElementById('tp-since').addEventListener('change', () => { presetDeselect('tp'); fetchTopRange(); });
+  document.getElementById('tp-until').addEventListener('change', () => { presetDeselect('tp'); fetchTopRange(); });
+  document.getElementById('rp-since').addEventListener('change', () => { presetDeselect('rp'); fetchReport(); });
+  document.getElementById('rp-until').addEventListener('change', () => { presetDeselect('rp'); fetchReport(); });
+
+  renderAll();
+  setTimeout(()=> setSaving(false), 100);
+
+  // Auto-trigger initial loads (Section 01 is open by default)
+  setTimeout(async () => {
+    const ok = await checkApiHealth();
+    if (ok) { _loaded.overview = true; fetchOverview(); }
+    else setLive('ov', false);
+  }, 200);
+})();
+</script>
+
+</body>
+</html>

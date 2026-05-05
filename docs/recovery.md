@@ -114,5 +114,5 @@ LINE Channel Token: ดูใน Render env vars
 
 ถ้าจริง ๆ ทำเองไม่ได้:
 1. โพส issue ที่ GitHub repo
-2. หา dev มาช่วย — ส่ง repo URL + RECOVERY.md ให้
+2. หา dev มาช่วย — ส่ง repo URL + docs/recovery.md ให้
 3. ทุกอย่างมีระบุไว้ในนี้แล้ว · ใครก็ทำต่อได้

@@ -87,6 +87,7 @@ cd ~/Desktop/Code/ads-report-everly
 | `.github/workflows/daily-line.yml` | GitHub Actions cron 23:59 BKK |
 | `requirements.txt` | Python deps |
 | `runtime.txt` | python-3.11 (Render) |
+| `docs/` | Master reference, recovery guide, and Facebook token notes |
 
 ---
 

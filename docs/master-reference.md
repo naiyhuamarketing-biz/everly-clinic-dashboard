@@ -1,0 +1,111 @@
+# 🌿 Everly Clinic Dashboard — Master Reference
+อัปเดต: 3 พฤษภาคม 2026 · DEPLOYED LIVE
+
+---
+
+## 🔗 ลิงก์ที่ต้องรู้ (สำคัญที่สุด!)
+
+| | URL |
+|---|---|
+| 🌐 **ลิงก์เปิด dashboard** | **https://everly-clinic.onrender.com** |
+| 🐙 GitHub repo | https://github.com/naiyhuamarketing-biz/everly-clinic-dashboard |
+| 🔧 Render dashboard | https://dashboard.render.com/web/srv-d7rjoj77f7vs73d1f2dg |
+| ⏰ GitHub Actions runs | https://github.com/naiyhuamarketing-biz/everly-clinic-dashboard/actions |
+| 📂 Local code | `~/Desktop/Code/ads-report-everly/` |
+
+---
+
+## ✅ ทำงานอัตโนมัติแล้ว (Mac ปิดก็ใช้ได้)
+
+| ฟีเจอร์ | สถานะ |
+|---|---|
+| Dashboard เปิดได้ 24/7 | ✅ Render free tier |
+| Live Meta API (cache 10 นาที) | ✅ |
+| Auto refresh ทุกครั้ง user กด refresh | ✅ |
+| **ส่ง LINE 23:59 ทุกคืน** | ✅ GitHub Actions cron |
+| Auto-redeploy เมื่อ push code | ✅ |
+
+---
+
+## ⏰ LINE 23:59 BKK auto-send
+
+- **Workflow:** `.github/workflows/daily-line.yml`
+- **Schedule:** `59 16 * * *` (UTC = 23:59 Bangkok)
+- **Endpoint:** `/api/everly/send-daily-line`
+- **กลุ่มที่ส่ง:** เดียวกับ Glow (Glow Visage group)
+- **ทดสอบแล้ว:** ✅ `25279508679` workflow run = success
+- **Trigger manual:** GitHub Actions tab → "Run workflow"
+
+### Format ที่ส่ง
+```
+EVERLY CLINIC — DAILY REPORT
+
+Report ประจำวัน (3 พฤษภาคม 2026)
+
+วันนี้ ใช้เงิน: ฿xxx.xx
+คนทัก: x คน
+เฉลี่ยต่อคนทัก: ฿xx
+ยอดขาย: ฿xxx
+กำไร/ขาดทุน: ±฿xxx
+
+============
+Report สะสมตั้งแต่ต้นเดือน – ปัจจุบัน
+ภาพรวม ใช้เงินรวม: ...
+```
+
+---
+
+## 🔑 Credentials (ใน Render env vars)
+
+```
+FB_ACCESS_TOKEN=EAANuoJgaikoBRbhK2TjwCpGchToT7EBWCVyx4WvvuujBI9iZCaOZ...
+FB_APP_ID=966060955830858
+FB_APP_SECRET=3e691fecc3d944143a01c0bc62347c6c
+FB_ACCOUNT_EVERLY=1965556974211662
+LINE_CHANNEL_ACCESS_TOKEN=MzX1VK/8MIvT4aHILi/iuVYJ0pE...
+LINE_GROUP_ID=Ca5ee252c90c5b73799813eed13f0ec6d
+```
+
+**Token expires:** ~2026-07-01 (60 days)
+- ถ้าเปิด dashboard ทุก 24 ชม → token auto-extend
+- ถ้าหมด: รัน `~/Desktop/Code/ads-report/refresh_token.py` (ของ Glow) → copy token ใหม่ → Render env → save
+
+---
+
+## 🆘 Troubleshooting
+
+| ปัญหา | วิธีแก้ |
+|---|---|
+| Dashboard เปิดช้า ครั้งแรก ~30 วิ | Cold start (Render free tier) — รอ ปกติ |
+| ตัวเลขไม่อัปเดต | กดปุ่ม "↻ Refresh" ใน dashboard |
+| LINE ไม่ส่ง 23:59 | เช็ค https://github.com/naiyhuamarketing-biz/everly-clinic-dashboard/actions |
+| Token error | refresh token + อัปเดต Render env |
+| Render down | https://status.render.com |
+
+### Manual ทดสอบ LINE ส่ง
+```bash
+curl -X POST https://everly-clinic.onrender.com/api/everly/send-daily-line
+```
+
+### Manual trigger GitHub Actions cron
+- เปิด https://github.com/naiyhuamarketing-biz/everly-clinic-dashboard/actions
+- เลือก "Daily LINE notification"
+- กด "Run workflow"
+
+---
+
+## 🚀 Roadmap (อยากทำต่อ)
+
+- [x] Deploy 24/7 ✅
+- [x] LINE 23:59 auto ✅
+- [ ] ใส่โลโก้จริงแทน "e" monogram (save `assets/everly_logo.png`)
+- [ ] สร้าง LINE group เฉพาะ Everly (ตอนนี้ใช้กลุ่ม Glow ร่วม)
+- [ ] AI Insights — narrative สรุปเดือน
+- [ ] เพิ่มคลินิกอื่น (Yiaoya / Tuba / Beautier) ใช้ pattern เดียวกัน
+
+---
+
+## 🔐 ห้ามแชร์
+
+- FB App Secret · FB Access Token · LINE Channel Token · GitHub PAT
+- ถ้า leak: revoke ทันทีที่ developers.facebook.com / line developer console / github settings

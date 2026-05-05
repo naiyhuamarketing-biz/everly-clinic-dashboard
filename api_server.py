@@ -42,8 +42,14 @@ app.add_middleware(
 
 # Path to the dashboard HTML (lives inside the repo for Render deploy)
 DASHBOARD_FILE = ROOT / "dashboard.html"
+ASSETS_DIR = ROOT / "assets"
 SENT_STATE_FILE = Path(os.getenv("SENT_STATE_FILE", "/tmp/everly-line-sent.json"))
 SUMMARY_SNAPSHOT_DIR = Path(os.getenv("SUMMARY_SNAPSHOT_DIR", "/tmp/everly-summary-snapshots"))
+
+# Mount /assets so brand logos (assets/logos/everly.png etc.) are served
+# directly by FastAPI — used by <img src="/assets/logos/..."> in dashboard.html
+if ASSETS_DIR.exists():
+    app.mount("/assets", StaticFiles(directory=str(ASSETS_DIR)), name="assets")
 
 
 # ── Cache (mirrors Streamlit's @st.cache_data ttl=600) ─────────────

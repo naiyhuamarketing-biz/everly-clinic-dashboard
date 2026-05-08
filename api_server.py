@@ -459,10 +459,89 @@ def clear_cache():
     return {"cleared": n}
 
 
+# Module-level runtime override for page token — set by /admin/derive-page-token
+# Survives within the same process; Render restart reverts to env var
+_RUNTIME_PAGE_TOKEN: Optional[str] = None
+
+
+@app.post("/api/everly/admin/derive-page-token")
+def derive_page_token(payload: dict = Body(...)):
+    """One-shot helper: takes a short-lived user token from Graph Explorer,
+    exchanges to long-lived (60d), then derives a never-expiring page token.
+    Stores in process memory so funnel endpoint uses it immediately,
+    AND returns it so user can save permanently to FB_PAGE_TOKEN_EVERLY env.
+    """
+    import requests as _r
+    user_token = (payload.get("user_token") or "").strip()
+    if not user_token:
+        raise HTTPException(400, "user_token required")
+    page_id = os.getenv("FB_PAGE_ID_EVERLY", "776628652192729")
+    app_id = os.getenv("FB_APP_ID", "")
+    app_secret = os.getenv("FB_APP_SECRET", "")
+    if not (app_id and app_secret):
+        raise HTTPException(503, "FB_APP_ID + FB_APP_SECRET not configured")
+
+    # Step 1: short → long user token
+    r1 = _r.get(
+        "https://graph.facebook.com/v20.0/oauth/access_token",
+        params={
+            "grant_type": "fb_exchange_token",
+            "client_id": app_id,
+            "client_secret": app_secret,
+            "fb_exchange_token": user_token,
+        },
+        timeout=15,
+    )
+    if r1.status_code != 200:
+        raise HTTPException(502, f"Exchange failed: {r1.text[:200]}")
+    long_user = r1.json().get("access_token")
+    if not long_user:
+        raise HTTPException(502, "Long-lived user token missing")
+
+    # Step 2: long user → page token (never expires when source is long-lived + business mgmt)
+    r2 = _r.get(
+        f"https://graph.facebook.com/v20.0/{page_id}",
+        params={"fields": "access_token,name", "access_token": long_user},
+        timeout=15,
+    )
+    if r2.status_code != 200:
+        raise HTTPException(502, f"Page token fetch failed: {r2.text[:200]}")
+    data = r2.json()
+    page_token = data.get("access_token")
+    if not page_token:
+        raise HTTPException(502, "Page access_token missing")
+
+    # Step 3: Verify by calling conversations
+    r3 = _r.get(
+        f"https://graph.facebook.com/v20.0/{page_id}/conversations",
+        params={"fields": "message_count", "limit": 1, "access_token": page_token},
+        timeout=15,
+    )
+    test_ok = r3.status_code == 200 and "data" in r3.json()
+
+    # Step 4: stash in process memory (immediate use)
+    global _RUNTIME_PAGE_TOKEN
+    _RUNTIME_PAGE_TOKEN = page_token
+
+    return {
+        "ok": True,
+        "page_name": data.get("name", ""),
+        "page_token": page_token,  # full value — caller should save to env then revoke from response history
+        "page_token_prefix": page_token[:12],
+        "page_token_suffix": page_token[-12:],
+        "page_token_len": len(page_token),
+        "test_conversations_ok": test_ok,
+        "instructions": "Save page_token to Render env var FB_PAGE_TOKEN_EVERLY. "
+                        "Then funnel endpoint will use it permanently. "
+                        "Until then, stored in process memory (resets on Render restart).",
+    }
+
+
 # ── Admin tab: Page Conversations API endpoints ─────────────────
 def _page_credentials():
-    """Page Access Token + Page ID — set in Render env vars."""
-    token = os.getenv("FB_PAGE_TOKEN_EVERLY", "")
+    """Page Access Token + Page ID — set in Render env vars.
+    Falls back to runtime-derived token if available (set via /admin/derive-page-token)."""
+    token = _RUNTIME_PAGE_TOKEN or os.getenv("FB_PAGE_TOKEN_EVERLY", "")
     pid = os.getenv("FB_PAGE_ID_EVERLY", "")
     return token, pid
 

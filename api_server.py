@@ -467,12 +467,19 @@ def _page_credentials():
     return token, pid
 
 
-def _fetch_all_conversations(since_ts: int, until_ts: int) -> list:
+def _fetch_all_conversations(since_ts: int, until_ts: int, _debug: dict = None) -> list:
     """Pull all conversations updated within [since_ts, until_ts] (unix seconds).
     Returns list of conversation dicts with id, message_count, updated_time, link.
+    If _debug dict is provided, populates with fetch diagnostics.
     """
     import requests as _r
     token, pid = _page_credentials()
+    if _debug is not None:
+        _debug["token_len"] = len(token)
+        _debug["token_prefix"] = token[:8] if token else ""
+        _debug["page_id"] = pid
+        _debug["since_ts"] = since_ts
+        _debug["until_ts"] = until_ts
     if not (token and pid):
         return []
 
@@ -483,22 +490,34 @@ def _fetch_all_conversations(since_ts: int, until_ts: int) -> list:
         "limit": 100,
         "access_token": token,
     }
-    # paginate up to 10 pages = 1000 conversations max
+    pages_fetched = 0
+    raw_total = 0
     for _ in range(10):
         resp = _r.get(url, params=params, timeout=20)
+        pages_fetched += 1
         if resp.status_code != 200:
+            if _debug is not None:
+                _debug["http_status"] = resp.status_code
+                _debug["error"] = resp.text[:300]
             break
         data = resp.json()
-        for c in data.get("data", []):
+        if _debug is not None and "fb_error" in data:
+            _debug["fb_error"] = data["fb_error"]
+        page_data = data.get("data", [])
+        raw_total += len(page_data)
+        for c in page_data:
             ut = c.get("updated_time", "")
             try:
-                # FB returns ISO 8601 like "2026-05-08T11:23:00+0000"
                 ut_dt = datetime.strptime(ut.split("+")[0], "%Y-%m-%dT%H:%M:%S")
                 ut_ts = int(ut_dt.replace(tzinfo=timezone.utc).timestamp())
             except Exception:
                 continue
             if ut_ts < since_ts:
-                # conversations sorted desc by updated_time → can break
+                if _debug is not None:
+                    _debug["pages_fetched"] = pages_fetched
+                    _debug["raw_total"] = raw_total
+                    _debug["filtered_total"] = len(out)
+                    _debug["broke_on_old"] = True
                 return out
             if ut_ts <= until_ts:
                 out.append({
@@ -507,12 +526,15 @@ def _fetch_all_conversations(since_ts: int, until_ts: int) -> list:
                     "updated_time": ut,
                     "link": c.get("link", ""),
                 })
-        # next page
         next_url = data.get("paging", {}).get("next")
         if not next_url:
             break
         url = next_url
         params = {}
+    if _debug is not None:
+        _debug["pages_fetched"] = pages_fetched
+        _debug["raw_total"] = raw_total
+        _debug["filtered_total"] = len(out)
     return out
 
 
@@ -560,8 +582,8 @@ def admin_funnel(
         }
 
     # Live: pull conversations
-    cache_key = f"admin-conv:{s.isoformat()}:{u.isoformat()}"
-    conversations = _cached(cache_key, lambda: _fetch_all_conversations(s_ts, u_ts))
+    debug_info = {} if os.getenv("ADMIN_DEBUG") or True else None
+    conversations = _fetch_all_conversations(s_ts, u_ts, _debug=debug_info)
 
     total = len(conversations)
     if total == 0:
@@ -599,6 +621,7 @@ def admin_funnel(
         "no_reply": no_reply,
         "ghosted": ghosted,
         "fetched_at": now_bkk().isoformat(),
+        "debug": debug_info,
     }
 
 

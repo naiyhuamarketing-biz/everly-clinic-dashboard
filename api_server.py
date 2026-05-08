@@ -620,6 +620,34 @@ def _page_credentials():
     return token, pid
 
 
+def _fetch_first_message_ts(conv_id: str, token: str) -> Optional[int]:
+    """Fetch the chronologically FIRST message of a conversation, return its created_time as unix ts.
+    Returns None on error. Used to determine if a conversation is genuinely "new" within a date range
+    (vs. an old conversation that merely had activity in the range).
+    """
+    import requests as _r
+    try:
+        r = _r.get(
+            f"https://graph.facebook.com/v20.0/{conv_id}",
+            params={
+                "fields": "messages.limit(1).order(chronological_order){created_time}",
+                "access_token": token,
+            },
+            timeout=10,
+        )
+        if r.status_code != 200:
+            return None
+        data = r.json()
+        msgs = (data.get("messages") or {}).get("data", [])
+        if not msgs:
+            return None
+        ts_str = msgs[0].get("created_time", "")
+        ts_dt = datetime.strptime(ts_str.split("+")[0], "%Y-%m-%dT%H:%M:%S")
+        return int(ts_dt.replace(tzinfo=timezone.utc).timestamp())
+    except Exception:
+        return None
+
+
 def _fetch_all_conversations(since_ts: int, until_ts: int, _debug: dict = None) -> list:
     """Pull all conversations updated within [since_ts, until_ts] (unix seconds).
     Returns list of conversation dicts with id, message_count, updated_time, link.
@@ -734,11 +762,51 @@ def admin_funnel(
             "warning": "FB_PAGE_TOKEN_EVERLY + FB_PAGE_ID_EVERLY not set — showing mock data",
         }
 
-    # Live: pull conversations
+    # Live: pull conversations updated in range (these include both NEW + continuing)
     debug_info = {}
     conversations = _fetch_all_conversations(s_ts, u_ts, _debug=debug_info)
 
-    total = len(conversations)
+    activity_total = len(conversations)
+    if activity_total == 0:
+        return {
+            "since": s.isoformat(), "until": u.isoformat(),
+            "configured": True, "total_inbox": 0,
+            "stages": [], "no_reply": 0, "ghosted": 0,
+            "debug": debug_info,
+        }
+
+    # Filter to ONLY conversations whose FIRST message (chronological) falls in range.
+    # This is the correct definition of "ทัก" = new customer initiating contact.
+    # Conversations that merely had activity (admin reply or customer follow-up to old thread)
+    # are EXCLUDED because they don't represent a new lead.
+    token, _ = _page_credentials()
+    new_conversations = []
+    skipped_old = 0
+    fetch_errors = 0
+    from concurrent.futures import ThreadPoolExecutor
+
+    def _check(c):
+        ts = _fetch_first_message_ts(c["id"], token)
+        return c, ts
+
+    # Parallelize first-message fetch (10 workers ≈ 3-4× faster than sequential)
+    with ThreadPoolExecutor(max_workers=10) as pool:
+        for c, ts in pool.map(_check, conversations):
+            if ts is None:
+                fetch_errors += 1
+                continue
+            if s_ts <= ts <= u_ts:
+                c["first_message_ts"] = ts
+                new_conversations.append(c)
+            else:
+                skipped_old += 1
+
+    debug_info["activity_in_range"] = activity_total
+    debug_info["new_in_range"] = len(new_conversations)
+    debug_info["skipped_old_continuing"] = skipped_old
+    debug_info["first_msg_fetch_errors"] = fetch_errors
+
+    total = len(new_conversations)
     if total == 0:
         return {
             "since": s.isoformat(), "until": u.isoformat(),
@@ -747,9 +815,9 @@ def admin_funnel(
             "debug": debug_info,
         }
 
-    # Cumulative funnel (each stage counts conversations that reached >= N messages)
+    # Cumulative funnel — counts only NEW conversations at each engagement level
     def count_at(min_msg: int) -> int:
-        return sum(1 for c in conversations if (c.get("message_count") or 0) >= min_msg)
+        return sum(1 for c in new_conversations if (c.get("message_count") or 0) >= min_msg)
 
     stages = [
         {"label": "ทัก", "count": total, "pct": 100, "highlight": False},
@@ -760,11 +828,10 @@ def admin_funnel(
         {"label": "คุย 10+ ประโยค", "count": count_at(10), "pct": round(count_at(10) / total * 100), "highlight": False},
     ]
 
-    # No-reply / ghosted classification needs message-level data — for now estimate
-    # No-reply: conversations with only 1 message (customer messaged, page didn't respond)
-    no_reply = sum(1 for c in conversations if (c.get("message_count") or 0) == 1)
+    # No-reply: new convs with only 1 message (customer messaged, page didn't respond yet)
+    no_reply = sum(1 for c in new_conversations if (c.get("message_count") or 0) == 1)
     # Ghosted: 2-3 messages (page replied but customer didn't continue)
-    ghosted = sum(1 for c in conversations if 2 <= (c.get("message_count") or 0) <= 3)
+    ghosted = sum(1 for c in new_conversations if 2 <= (c.get("message_count") or 0) <= 3)
 
     return {
         "since": s.isoformat(),

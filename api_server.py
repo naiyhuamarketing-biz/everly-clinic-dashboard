@@ -466,8 +466,10 @@ _RUNTIME_PAGE_TOKEN: Optional[str] = None
 
 @app.post("/api/everly/admin/derive-page-token")
 def derive_page_token(payload: dict = Body(...)):
-    """One-shot helper: takes a short-lived user token from Graph Explorer,
-    exchanges to long-lived (60d), then derives a never-expiring page token.
+    """One-shot helper: takes a user token (long or short), derives a page token.
+    Tries exchange-to-long-lived FIRST (best — gives never-expiring page token).
+    If exchange fails (e.g. token from Graph Explorer's app, not ours), falls back
+    to using the user token directly — page token then inherits user-token lifetime.
     Stores in process memory so funnel endpoint uses it immediately,
     AND returns it so user can save permanently to FB_PAGE_TOKEN_EVERLY env.
     """
@@ -478,38 +480,59 @@ def derive_page_token(payload: dict = Body(...)):
     page_id = os.getenv("FB_PAGE_ID_EVERLY", "776628652192729")
     app_id = os.getenv("FB_APP_ID", "")
     app_secret = os.getenv("FB_APP_SECRET", "")
-    if not (app_id and app_secret):
-        raise HTTPException(503, "FB_APP_ID + FB_APP_SECRET not configured")
 
-    # Step 1: short → long user token
-    r1 = _r.get(
-        "https://graph.facebook.com/v20.0/oauth/access_token",
-        params={
-            "grant_type": "fb_exchange_token",
-            "client_id": app_id,
-            "client_secret": app_secret,
-            "fb_exchange_token": user_token,
-        },
-        timeout=15,
-    )
-    if r1.status_code != 200:
-        raise HTTPException(502, f"Exchange failed: {r1.text[:200]}")
-    long_user = r1.json().get("access_token")
-    if not long_user:
-        raise HTTPException(502, "Long-lived user token missing")
+    exchange_attempted = False
+    exchange_ok = False
+    exchange_error = ""
+    effective_user_token = user_token  # default: use as-is
+    long_lived = False
 
-    # Step 2: long user → page token (never expires when source is long-lived + business mgmt)
+    # Step 1 (best path): short → long user token via OUR app's secret
+    if app_id and app_secret:
+        exchange_attempted = True
+        try:
+            r1 = _r.get(
+                "https://graph.facebook.com/v20.0/oauth/access_token",
+                params={
+                    "grant_type": "fb_exchange_token",
+                    "client_id": app_id,
+                    "client_secret": app_secret,
+                    "fb_exchange_token": user_token,
+                },
+                timeout=15,
+            )
+            if r1.status_code == 200:
+                lu = r1.json().get("access_token")
+                if lu:
+                    effective_user_token = lu
+                    exchange_ok = True
+                    long_lived = True
+                else:
+                    exchange_error = "Exchange returned no access_token"
+            else:
+                exchange_error = f"HTTP {r1.status_code}: {r1.text[:200]}"
+        except Exception as e:
+            exchange_error = f"Exception: {e!r}"
+
+    # Step 2: derive page token from /me/accounts (works for both long+short user tokens)
+    # Use /me/accounts (not /{page_id}) because user token from another app may not
+    # have edge to the page directly, but /me/accounts always returns ALL pages user manages.
     r2 = _r.get(
-        f"https://graph.facebook.com/v20.0/{page_id}",
-        params={"fields": "access_token,name", "access_token": long_user},
+        "https://graph.facebook.com/v20.0/me/accounts",
+        params={"access_token": effective_user_token, "fields": "id,name,access_token,tasks"},
         timeout=15,
     )
     if r2.status_code != 200:
-        raise HTTPException(502, f"Page token fetch failed: {r2.text[:200]}")
-    data = r2.json()
-    page_token = data.get("access_token")
+        raise HTTPException(502, f"/me/accounts fetch failed: {r2.text[:300]}")
+    accounts = r2.json().get("data", [])
+    matching = next((p for p in accounts if str(p.get("id")) == str(page_id)), None)
+    if not matching:
+        page_list = [{"id": p.get("id"), "name": p.get("name")} for p in accounts]
+        raise HTTPException(404, f"Page {page_id} not in user's managed pages. Available: {page_list}")
+    page_token = matching.get("access_token")
     if not page_token:
-        raise HTTPException(502, "Page access_token missing")
+        raise HTTPException(502, "Page returned but access_token missing — check pages_show_list permission")
+    page_name = matching.get("name", "")
 
     # Step 3: Verify by calling conversations
     r3 = _r.get(
@@ -518,6 +541,7 @@ def derive_page_token(payload: dict = Body(...)):
         timeout=15,
     )
     test_ok = r3.status_code == 200 and "data" in r3.json()
+    test_error = "" if test_ok else f"HTTP {r3.status_code}: {r3.text[:200]}"
 
     # Step 4: stash in process memory (immediate use)
     global _RUNTIME_PAGE_TOKEN
@@ -525,15 +549,23 @@ def derive_page_token(payload: dict = Body(...)):
 
     return {
         "ok": True,
-        "page_name": data.get("name", ""),
-        "page_token": page_token,  # full value — caller should save to env then revoke from response history
+        "page_name": page_name,
+        "page_token": page_token,  # full value — caller saves to env then revokes from response history
         "page_token_prefix": page_token[:12],
         "page_token_suffix": page_token[-12:],
         "page_token_len": len(page_token),
+        "long_lived": long_lived,
+        "exchange_attempted": exchange_attempted,
+        "exchange_ok": exchange_ok,
+        "exchange_error": exchange_error,
         "test_conversations_ok": test_ok,
-        "instructions": "Save page_token to Render env var FB_PAGE_TOKEN_EVERLY. "
-                        "Then funnel endpoint will use it permanently. "
-                        "Until then, stored in process memory (resets on Render restart).",
+        "test_error": test_error,
+        "instructions": (
+            "Save page_token to Render env var FB_PAGE_TOKEN_EVERLY. "
+            + ("Long-lived page token — never expires." if long_lived
+               else "WARNING: Token derived from short-lived user token — expires when user token expires (1-2 hours). "
+                    "For permanent token, generate user token from OUR app (FB_APP_ID).")
+        ),
     }
 
 

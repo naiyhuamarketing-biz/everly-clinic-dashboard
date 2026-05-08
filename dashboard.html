@@ -709,6 +709,24 @@
     </div>
   </div>
 
+  <!-- ── Shared Date Filter for Admin Tab ── -->
+  <section class="max-w-[1400px] mx-auto px-8 pt-2 pb-2">
+    <div class="rounded-2xl p-4" style="background: var(--ivory); border: 1px solid var(--line);">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div class="flex items-center gap-3 flex-wrap">
+          <span class="stamp">PERIOD</span>
+          <div class="range-pills" id="ad-presets"></div>
+        </div>
+        <div class="flex gap-2 items-center">
+          <input type="date" id="ad-since" class="date-input" style="border:1px solid var(--line); padding:6px 10px; border-radius:10px; font-size:12px;" />
+          <input type="date" id="ad-until" class="date-input" style="border:1px solid var(--line); padding:6px 10px; border-radius:10px; font-size:12px;" />
+          <button class="btn btn-ghost btn-sm" onclick="refreshAdminTab()">↻ Refresh</button>
+        </div>
+      </div>
+      <div class="text-[10px] mt-2" style="color:var(--soft)">ฟิลเตอร์นี้ใช้กับทุก section ใน "ทีม Admin" · เปลี่ยนช่วงเวลา → ตัวเลขทุก section อัปเดตพร้อมกัน</div>
+    </div>
+  </section>
+
   <!-- ── FUNNEL ── -->
   <section class="max-w-[1400px] mx-auto px-8 pt-2 pb-6">
     <details class="section" id="sec-funnel" open>
@@ -1765,7 +1783,31 @@ function renderAll() {
       window.scrollTo({ top: document.querySelector('.main-tabs').offsetTop - 20, behavior: 'smooth' });
     });
   });
+
+  // ============= ADMIN TAB FILTER (date range) =============
+  // Populate preset pills + date inputs for Admin tab.
+  // Currently using mock data — preset clicks just show toast until we wire FB Pages API.
+  if (document.getElementById('ad-presets')) {
+    document.getElementById('ad-presets').innerHTML = presetPillsHTML('today');
+    document.getElementById('ad-since').value = isoToday();
+    document.getElementById('ad-until').value = isoToday();
+    document.querySelectorAll('#ad-presets .range-pill').forEach(b => {
+      b.addEventListener('click', () => applyPreset('ad', b.dataset.preset, refreshAdminTab));
+    });
+    document.getElementById('ad-since').addEventListener('change', () => { presetDeselect('ad'); refreshAdminTab(); });
+    document.getElementById('ad-until').addEventListener('change', () => { presetDeselect('ad'); refreshAdminTab(); });
+  }
 })();
+
+// Stub: refreshes admin tab. Real implementation will fetch from /api/everly/admin/* endpoints.
+function refreshAdminTab() {
+  const since = document.getElementById('ad-since').value;
+  const until = document.getElementById('ad-until').value;
+  toast(`📅 ${since} → ${until} · รอเชื่อม FB Pages API`, 'save');
+  // TODO: call /api/everly/admin/funnel?since=&until=
+  // TODO: call /api/everly/admin/silence-trigger?since=&until=
+  // TODO: call /api/everly/admin/faq?since=&until=
+}
 </script>
 
 </body>

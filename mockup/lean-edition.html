@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Everly · Lean Edition · Mockup v2</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Italiana&family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700&family=Inter:wght@400;500;600;700&family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --rg-deepest: #3A1F12; --rg-deep: #5A3724; --rg-mid: #7A4F3A; --rg-light: #9B7558;
+    --rg-pale: #C9B399; --rg-mist: #E8DAC2; --blush: #F0E5D0; --cream: #F8F1E5;
+    --ivory: #FDFAF2; --pure: #FFFFFF; --charcoal: #2D1B10; --soft: #6B554A;
+    --gray: #A8968A; --line: #E0D2BC; --line-soft: #ECE0CA; --gold: #B8945F;
+    --sage: #7A9E7E; --sagebg: #E8EFE8; --warm: #C9904E; --warmbg: #F8EBD7;
+    --dusty: #A85C4E; --dustybg: #F2DDD7; --hot: #C53030; --hotbg: #FEEAEA;
+    --info: #4A6F8F; --infobg: #E8EEF4;
+  }
+  * { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+  html, body { font-family: 'Prompt', system-ui, sans-serif; color: var(--charcoal); background: var(--blush); }
+  .font-display { font-family: 'Italiana', serif; }
+  .font-serif { font-family: 'Cormorant Garamond', serif; }
+  .num { font-family: 'Cormorant Garamond', 'Inter'; font-variant-numeric: tabular-nums lining-nums; }
+  .num-mono { font-family: 'Inter'; font-variant-numeric: tabular-nums lining-nums; font-feature-settings: "tnum" 1, "ss01" 1; }
+  body::before {
+    content: ''; position: fixed; inset: 0; z-index: -1;
+    background:
+      radial-gradient(ellipse 700px 500px at 8% 12%, rgba(122,79,58,.16), transparent 55%),
+      radial-gradient(ellipse 600px 800px at 92% 25%, rgba(74,42,24,.12), transparent 50%),
+      radial-gradient(ellipse 900px 600px at 50% 75%, rgba(184,148,95,.18), transparent 60%),
+      linear-gradient(165deg, var(--ivory) 0%, var(--cream) 50%, var(--rg-mist) 100%);
+  }
+  .stamp { font-family: 'Prompt'; letter-spacing: .25em; font-size: 9px; color: var(--rg-deep); font-weight: 500; text-transform: uppercase; }
+  .topbar { position: sticky; top: 0; z-index: 50; backdrop-filter: blur(12px); background: rgba(253,250,242,.85); border-bottom: 1px solid var(--line-soft); }
+  .ev-mono { width: 96px; height: 96px; border-radius: 50%; background: var(--ivory); overflow: hidden; box-shadow: 0 1px 0 rgba(255,255,255,.4) inset, 0 30px 60px -20px rgba(58,31,18,.45); position: relative; }
+  .ev-mono img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
+  .ev-mono::after { content: ''; position: absolute; inset: -10px; border-radius: 50%; border: 1px solid rgba(122,79,58,.4); }
+  .ev-mono::before { content: ''; position: absolute; inset: -16px; border-radius: 50%; border: 1px dashed rgba(122,79,58,.25); }
+  .metal { background: linear-gradient(135deg, #7A4F3A 0%, #C9B399 20%, #5A3724 35%, #9B7558 50%, #3A1F12 65%, #B8945F 80%, #7A4F3A 100%); background-size: 200% 200%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: shimmer 8s ease infinite; }
+  @keyframes shimmer { 0%,100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
+  .metal-bg { background: linear-gradient(135deg, #7A4F3A, #9B7558 50%, #5A3724); }
+
+  .card { background: var(--ivory); border: 1px solid var(--line); border-radius: 18px; box-shadow: 0 1px 0 rgba(90,55,36,.04), 0 30px 60px -40px rgba(58,31,18,.18); transition: all .25s; }
+  .card:hover { box-shadow: 0 1px 0 rgba(90,55,36,.06), 0 40px 80px -40px rgba(58,31,18,.25); }
+
+  .kpi { padding: 24px; border-radius: 16px; background: var(--ivory); border: 1px solid var(--line); position: relative; overflow: hidden; transition: all .25s; }
+  .kpi:hover { transform: translateY(-2px); box-shadow: 0 30px 60px -25px rgba(58,31,18,.20); }
+  .kpi::before { content: ''; position: absolute; top:0; left:50%; transform: translateX(-50%); width: 30px; height: 1px; background: var(--gold); }
+  .kpi-deco { position: absolute; right: -20px; top: -20px; width: 110px; height: 110px; border-radius: 50%; background: radial-gradient(circle, rgba(184,148,95,.18), transparent 70%); }
+  .kpi-label { text-transform: uppercase; letter-spacing: .12em; font-size: 10px; color: var(--soft); font-weight: 600; }
+  .kpi-value { font-family: 'Inter'; font-weight: 700; line-height: 1; color: var(--rg-deepest); margin-top: 14px; font-size: 36px; letter-spacing: -.02em; font-variant-numeric: tabular-nums lining-nums; }
+  .kpi-sub { font-size: 11px; color: var(--soft); margin-top: 10px; }
+
+  /* Tabs - main switch */
+  .main-tabs { display: flex; gap: 4px; background: var(--cream); padding: 5px; border-radius: 999px; border: 1px solid var(--line); max-width: 420px; margin: 0 auto; }
+  .main-tab { flex: 1; padding: 11px 18px; border-radius: 999px; font-size: 13px; font-weight: 500; color: var(--soft); cursor: pointer; transition: all .2s; letter-spacing: .02em; display: flex; align-items: center; justify-content: center; gap: 8px; position: relative; }
+  .main-tab:hover { color: var(--rg-deep); }
+  .main-tab.active { background: var(--rg-deep); color: var(--ivory); box-shadow: 0 4px 12px -4px rgba(58,31,18,.35); }
+
+  .pill { display:inline-flex; align-items:center; gap:6px; padding: 4px 12px; border-radius: 999px; font-size: 11px; font-weight: 600; letter-spacing: .04em; }
+  .pill-up { background: var(--sagebg); color: var(--sage); }
+  .pill-down { background: var(--dustybg); color: var(--dusty); }
+  .pill-flat { background: var(--cream); color: var(--soft); }
+  .pill-hot { background: var(--hotbg); color: var(--hot); }
+  .pill-warm { background: var(--warmbg); color: var(--warm); }
+  .pill-info { background: var(--infobg); color: var(--info); }
+
+  .btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 999px; font-size: 12px; font-weight: 600; cursor: pointer; transition: all .2s; }
+  .btn-primary { background: var(--rg-deep); color: var(--ivory); border: 1px solid var(--rg-deep); }
+  .btn-primary:hover { background: var(--rg-deepest); transform: translateY(-1px); }
+  .btn-ghost { background: transparent; border: 1px solid var(--line); color: var(--rg-deep); }
+  .btn-ghost:hover { background: var(--cream); border-color: var(--rg-light); }
+
+  /* Funnel bars */
+  .funnel-row { display: flex; align-items: center; gap: 14px; padding: 8px 0; }
+  .funnel-label { width: 130px; font-size: 13px; color: var(--soft); display: flex; align-items: center; gap: 8px; }
+  .funnel-label .icon { font-size: 16px; }
+  .funnel-track { flex: 1; height: 28px; background: var(--cream); border-radius: 6px; position: relative; overflow: hidden; }
+  .funnel-fill { position: absolute; inset: 0; border-radius: 6px; display: flex; align-items: center; padding-left: 10px; color: white; font-weight: 600; font-size: 12px; }
+  .funnel-count { width: 110px; text-align: right; font-family: 'Cormorant Garamond'; font-variant-numeric: tabular-nums lining-nums; }
+
+  /* Drop-off cards (next to funnel) */
+  .dropoff-card { padding: 18px; border-radius: 14px; border: 1px solid var(--line); position: relative; }
+  .dropoff-card.urgent { background: linear-gradient(135deg, var(--hotbg) 0%, var(--ivory) 60%); border-color: var(--hot); }
+  .dropoff-card.cool { background: linear-gradient(135deg, var(--infobg) 0%, var(--ivory) 60%); border-color: var(--info); }
+
+  /* Silence trigger bars */
+  .bar-row { display: flex; align-items: center; gap: 10px; padding: 5px 0; font-size: 13px; }
+  .bar-label { width: 130px; }
+  .bar-track { flex: 1; height: 22px; background: var(--cream); border-radius: 4px; position: relative; }
+  .bar-fill { position: absolute; inset: 0; border-radius: 4px; }
+  .bar-num { width: 90px; text-align: right; font-family: 'Cormorant Garamond'; font-variant-numeric: tabular-nums lining-nums; font-weight: 600; }
+
+  /* Top Highlights ad rank */
+  .ad-rank { display: flex; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line-soft); align-items: center; }
+  .ad-rank:last-child { border-bottom: none; }
+  .rank-num { width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: white; font-family: 'Italiana'; font-size: 16px; flex-shrink: 0; }
+
+  /* FAQ list */
+  .faq-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px dashed var(--line-soft); }
+  .faq-row:last-child { border-bottom: none; }
+  .faq-num { font-family: 'Italiana'; font-size: 18px; color: var(--gold); width: 30px; }
+
+  /* Trend chart placeholder */
+  .trend-bar { display: flex; align-items: end; gap: 8px; height: 180px; padding: 10px 0; }
+  .trend-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .trend-col .bar1 { width: 100%; background: var(--rg-mid); border-radius: 4px 4px 0 0; }
+  .trend-col .bar2 { width: 100%; background: var(--gold); border-radius: 4px 4px 0 0; }
+  .trend-col .label { font-size: 11px; color: var(--soft); margin-top: 4px; }
+</style>
+</head>
+<body>
+
+<!-- ========== TOPBAR ========== -->
+<div class="topbar">
+  <div class="max-w-[1280px] mx-auto px-6 py-3 flex items-center justify-between gap-4 flex-wrap">
+    <div class="flex items-center gap-3">
+      <div class="w-9 h-9 rounded-full overflow-hidden border border-[var(--line)]">
+        <img src="https://everly-clinic.onrender.com/assets/logos/everly.png" alt="" class="w-full h-full object-cover" />
+      </div>
+      <div>
+        <div class="font-display text-lg lowercase text-[var(--rg-deepest)] leading-none">everly</div>
+        <div class="text-[10px] tracking-[.2em] uppercase text-[var(--soft)] mt-0.5">Daily Ads Report · 8 พ.ค. 2026</div>
+      </div>
+    </div>
+    <div class="flex items-center gap-2">
+      <div class="text-xs text-[var(--soft)] hidden sm:flex items-center gap-1.5">
+        <span class="w-1.5 h-1.5 rounded-full bg-[var(--sage)]"></span>
+        <span>LIVE · 14:23</span>
+      </div>
+      <button class="btn btn-ghost">↻ รีเฟรช</button>
+    </div>
+  </div>
+</div>
+
+<!-- ========== HERO ========== -->
+<section class="max-w-[1280px] mx-auto px-6 pt-12 pb-6 text-center">
+  <div class="flex justify-center mb-6">
+    <div class="ev-mono"><img src="https://everly-clinic.onrender.com/assets/logos/everly.png" alt="" /></div>
+  </div>
+  <div class="stamp mb-2">นายหัว กรุ๊ป · Ad Operations</div>
+  <h1 class="font-display text-6xl lowercase metal leading-none">everly</h1>
+  <div class="text-xs tracking-[.6em] uppercase mt-3 text-[var(--rg-mid)]">Clinic</div>
+  <hr class="max-w-[80px] mx-auto my-6 border-0 h-px" style="background: linear-gradient(90deg, transparent, var(--rg-mid), transparent);" />
+  <div class="font-serif text-2xl text-[var(--charcoal)] mb-1">Lean Edition · Daily Report</div>
+  <div class="text-xs tracking-[.4em] uppercase text-[var(--soft)]">8 พฤษภาคม 2026</div>
+</section>
+
+<!-- ========== MAIN TAB SWITCHER ========== -->
+<section class="max-w-[1280px] mx-auto px-6 py-4">
+  <div class="main-tabs">
+    <div class="main-tab active" data-tab="ads">📊 ทีม Ads</div>
+    <div class="main-tab" data-tab="admin">💬 ทีม Admin</div>
+  </div>
+</section>
+
+<!-- ============================================================
+     TAB: ทีม ADS
+============================================================ -->
+<div id="tab-ads" class="tab-pane">
+
+  <!-- ========== Performance Overview ========== -->
+  <section class="max-w-[1280px] mx-auto px-6 py-6">
+    <div class="flex items-center justify-between mb-1">
+      <div class="font-serif text-2xl text-[var(--rg-deepest)]">Performance Overview · ภาพรวม</div>
+      <span class="pill pill-up">⚡ 8 วันล่าสุด</span>
+    </div>
+    <div class="text-xs text-[var(--soft)] mb-5">ดึงสดจาก Meta Marketing API · cache 10 นาที</div>
+
+    <!-- 6 main KPIs -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+      <div class="kpi"><div class="kpi-deco"></div><div class="relative">
+        <div class="kpi-label">ยอดใช้จ่าย · Spend</div>
+        <div class="kpi-value">฿21,661</div>
+        <div class="kpi-sub">8 วัน · เฉลี่ย ฿2,708/วัน</div>
+      </div></div>
+      <div class="kpi"><div class="kpi-deco"></div><div class="relative">
+        <div class="kpi-label">รายได้ · Revenue</div>
+        <div class="kpi-value">฿112,597</div>
+        <div class="kpi-sub">จาก Pixel purchase events</div>
+      </div></div>
+      <div class="kpi"><div class="kpi-deco"></div><div class="relative">
+        <div class="kpi-label">ROAS</div>
+        <div class="kpi-value">5.20<span class="text-2xl text-[var(--rg-mid)]">×</span></div>
+        <div class="kpi-sub">เป้า 10× · ปัจจุบัน 52%</div>
+      </div></div>
+      <div class="kpi"><div class="kpi-deco"></div><div class="relative">
+        <div class="kpi-label">Inbox</div>
+        <div class="kpi-value">157</div>
+        <div class="kpi-sub">messaging conversations</div>
+      </div></div>
+      <div class="kpi"><div class="kpi-deco"></div><div class="relative">
+        <div class="kpi-label">ต้นทุน / Inbox</div>
+        <div class="kpi-value">฿138</div>
+        <div class="kpi-sub">cost per inbox</div>
+      </div></div>
+      <div class="kpi"><div class="kpi-deco"></div><div class="relative">
+        <div class="kpi-label">Frequency</div>
+        <div class="kpi-value">1.70<span class="text-2xl text-[var(--rg-mid)]">×</span></div>
+        <div class="kpi-sub">ครั้งที่คนเดิมเห็นโฆษณา</div>
+      </div></div>
+    </div>
+
+    <!-- 3 secondary -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div class="card p-5"><div class="kpi-label">การมองเห็น · Impressions</div><div class="num text-[26px] mt-2 font-bold text-[var(--rg-deepest)]">210,443</div></div>
+      <div class="card p-5"><div class="kpi-label">การเข้าถึง · Reach</div><div class="num text-[26px] mt-2 font-bold text-[var(--rg-deepest)]">123,807</div></div>
+      <div class="card p-5"><div class="kpi-label">กำไร · Net</div><div class="num text-[26px] mt-2 font-bold text-[var(--sage)]">฿90,936</div></div>
+    </div>
+  </section>
+
+  <!-- ========== Top Highlights ========== -->
+  <section class="max-w-[1280px] mx-auto px-6 py-6">
+    <div class="flex items-center justify-between mb-1">
+      <div class="font-serif text-2xl text-[var(--rg-deepest)]">Top Highlights · แอดที่ดีที่สุด</div>
+      <span class="pill pill-flat">เรียงตาม ROAS · ค่อย Inbox</span>
+    </div>
+    <div class="text-xs text-[var(--soft)] mb-4">8 วันล่าสุด · 1-8 พ.ค. 2026</div>
+
+    <div class="card p-6">
+      <div class="ad-rank">
+        <div class="rank-num metal-bg">1</div>
+        <div class="flex-1 min-w-0">
+          <div class="font-semibold text-[var(--charcoal)] truncate">Filler ปาก โปร 9,900 — vs ปาก after</div>
+          <div class="text-xs text-[var(--soft)] mt-1">28 inbox · ROAS <b class="text-[var(--sage)]">14.2×</b> · ใช้ ฿2,200 · รายได้ ฿31,240</div>
+        </div>
+      </div>
+      <div class="ad-rank">
+        <div class="rank-num" style="background: var(--rg-light);">2</div>
+        <div class="flex-1 min-w-0">
+          <div class="font-semibold text-[var(--charcoal)] truncate">Botox ลดริ้วรอย หมอเอ๋ย</div>
+          <div class="text-xs text-[var(--soft)] mt-1">42 inbox · ROAS <b class="text-[var(--sage)]">11.8×</b> · ใช้ ฿3,500 · รายได้ ฿41,300</div>
+        </div>
+      </div>
+      <div class="ad-rank">
+        <div class="rank-num" style="background: var(--rg-pale);">3</div>
+        <div class="flex-1 min-w-0">
+          <div class="font-semibold text-[var(--charcoal)] truncate">Threadlift before/after — หน้าเด็ก 10 ปี</div>
+          <div class="text-xs text-[var(--soft)] mt-1">18 inbox · ROAS <b class="text-[var(--sage)]">9.5×</b> · ใช้ ฿1,800 · รายได้ ฿17,100</div>
+        </div>
+      </div>
+      <div class="ad-rank">
+        <div class="rank-num" style="background: var(--gold);">4</div>
+        <div class="flex-1 min-w-0">
+          <div class="font-semibold text-[var(--charcoal)] truncate">Laser ฝ้า กระ — โปรพิเศษ 4,990</div>
+          <div class="text-xs text-[var(--soft)] mt-1">35 inbox · ROAS <b>7.2×</b> · ใช้ ฿4,000 · รายได้ ฿28,800</div>
+        </div>
+      </div>
+      <div class="ad-rank">
+        <div class="rank-num" style="background: var(--gray);">5</div>
+        <div class="flex-1 min-w-0">
+          <div class="font-semibold text-[var(--charcoal)] truncate">HIFU ยกกระชับ — ทำครั้งเดียวเห็นผล</div>
+          <div class="text-xs text-[var(--soft)] mt-1">22 inbox · ROAS <b>6.8×</b> · ใช้ ฿2,500 · รายได้ ฿17,000</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== Performance Trend ========== -->
+  <section class="max-w-[1280px] mx-auto px-6 py-6">
+    <div class="font-serif text-2xl text-[var(--rg-deepest)] mb-1">Performance Trend · เปรียบเทียบรายเดือน</div>
+    <div class="text-xs text-[var(--soft)] mb-4">Spend vs Revenue · ROAS เทียบเป้า 10×</div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      <div class="card p-6">
+        <div class="font-serif text-lg text-[var(--rg-deepest)] mb-1">Spend vs Revenue (รายเดือน)</div>
+        <div class="text-xs text-[var(--soft)] mb-3">เทียบ 4 เดือน</div>
+        <div class="trend-bar">
+          <div class="trend-col"><div class="bar2" style="height:35%"></div><div class="bar1" style="height:8%"></div><div class="label">ก.พ.</div></div>
+          <div class="trend-col"><div class="bar2" style="height:48%"></div><div class="bar1" style="height:9%"></div><div class="label">มี.ค.</div></div>
+          <div class="trend-col"><div class="bar2" style="height:62%"></div><div class="bar1" style="height:11%"></div><div class="label">เม.ย.</div></div>
+          <div class="trend-col"><div class="bar2" style="height:42%"></div><div class="bar1" style="height:9%"></div><div class="label">พ.ค.</div></div>
+        </div>
+        <div class="flex justify-end gap-4 text-xs text-[var(--soft)] mt-3">
+          <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm bg-[var(--rg-mid)]"></span>Spend</div>
+          <div class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm bg-[var(--gold)]"></span>Revenue</div>
+        </div>
+      </div>
+      <div class="card p-6">
+        <div class="font-serif text-lg text-[var(--rg-deepest)] mb-1">ROAS Trend</div>
+        <div class="text-xs text-[var(--soft)] mb-3">เป้า 10× (เส้นทอง)</div>
+        <div class="space-y-3 mt-3">
+          <div class="flex items-center justify-between text-sm"><span class="text-[var(--soft)]">ก.พ.</span><div class="flex-1 mx-3 h-2 bg-[var(--cream)] rounded-full overflow-hidden"><div class="h-full bg-[var(--rg-mid)]" style="width:42%"></div></div><span class="num font-semibold">4.2×</span></div>
+          <div class="flex items-center justify-between text-sm"><span class="text-[var(--soft)]">มี.ค.</span><div class="flex-1 mx-3 h-2 bg-[var(--cream)] rounded-full overflow-hidden"><div class="h-full bg-[var(--rg-mid)]" style="width:62%"></div></div><span class="num font-semibold">6.2×</span></div>
+          <div class="flex items-center justify-between text-sm"><span class="text-[var(--soft)]">เม.ย.</span><div class="flex-1 mx-3 h-2 bg-[var(--cream)] rounded-full overflow-hidden"><div class="h-full bg-[var(--sage)]" style="width:91%"></div></div><span class="num font-semibold">9.1×</span></div>
+          <div class="flex items-center justify-between text-sm"><span class="text-[var(--soft)] font-semibold">พ.ค.</span><div class="flex-1 mx-3 h-2 bg-[var(--cream)] rounded-full overflow-hidden"><div class="h-full bg-[var(--rg-mid)]" style="width:52%"></div></div><span class="num font-bold text-[var(--rg-deep)]">5.2×</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== Daily Report ========== -->
+  <section class="max-w-[1280px] mx-auto px-6 py-6">
+    <div class="flex items-center justify-between mb-1">
+      <div class="font-serif text-2xl text-[var(--rg-deepest)]">Daily Report · สรุปส่งลูกค้า</div>
+      <div class="flex gap-2">
+        <button class="btn btn-ghost">⎘ Copy</button>
+        <button class="btn btn-primary">→ ส่ง LINE</button>
+      </div>
+    </div>
+    <div class="text-xs text-[var(--soft)] mb-4">format ที่ doctor approved · ส่งอัตโนมัติทุก 23:59</div>
+
+    <div class="card p-6 font-mono text-sm leading-relaxed" style="background: var(--cream); white-space: pre-line;">EVERLY CLINIC — DAILY REPORT
+
+Report ประจำวัน (8 พฤษภาคม 2026)
+
+วันนี้ ใช้เงิน: ฿2,148.00
+คนทัก: 28 คน
+เฉลี่ยต่อคนทัก: ฿77
+ยอดขาย: ฿18,450
+กำไร/ขาดทุน: +฿16,302
+
+============
+Report สะสมตั้งแต่ต้นเดือน – ปัจจุบัน (1–8 พฤษภาคม 2026)
+
+ภาพรวม ใช้เงินรวม: ฿21,661
+เฉลี่ยต่อวัน: ฿2,708
+คนทักรวม: 157 คน
+เฉลี่ยต่อคนทัก: ฿138
+ยอดขาย: ฿112,597
+กำไร/ขาดทุน: +฿90,936
+
+============</div>
+  </section>
+
+</div>
+
+<!-- ============================================================
+     TAB: ทีม ADMIN
+============================================================ -->
+<div id="tab-admin" class="tab-pane hidden">
+
+  <!-- ========== FUNNEL ========== -->
+  <section class="max-w-[1280px] mx-auto px-6 py-6">
+    <div class="flex items-center justify-between mb-1">
+      <div class="font-serif text-2xl text-[var(--rg-deepest)]">Funnel · วันนี้</div>
+      <span class="pill pill-flat">8 พ.ค. 2026 · 28 คนทัก</span>
+    </div>
+    <div class="text-xs text-[var(--soft)] mb-5">จากทักจนได้เบอร์ · cumulative (ลด drop-off แต่ละขั้น) · % คิดจาก 28 คนทัก</div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+      <!-- LEFT: Funnel main (2 cols) -->
+      <div class="card p-6 lg:col-span-2">
+        <div class="space-y-1">
+          <div class="funnel-row">
+            <div class="funnel-label"><span class="icon">📨</span><b>ทัก</b></div>
+            <div class="funnel-track"><div class="funnel-fill" style="width:100%; background: linear-gradient(90deg, var(--rg-deep), var(--rg-mid));">100%</div></div>
+            <div class="funnel-count text-lg font-bold">28 คน</div>
+          </div>
+          <div class="funnel-row">
+            <div class="funnel-label"><span class="icon">💬</span>คุย 2+ ประโยค</div>
+            <div class="funnel-track"><div class="funnel-fill" style="width:78%; background: linear-gradient(90deg, var(--rg-mid), var(--rg-light));">78%</div></div>
+            <div class="funnel-count">22 คน</div>
+          </div>
+          <div class="funnel-row">
+            <div class="funnel-label"><span class="icon">💬</span>คุย 4+ ประโยค</div>
+            <div class="funnel-track"><div class="funnel-fill" style="width:64%; background: linear-gradient(90deg, var(--rg-light), var(--gold));">64%</div></div>
+            <div class="funnel-count">18 คน</div>
+          </div>
+          <div class="funnel-row">
+            <div class="funnel-label"><span class="icon">💬</span>คุย 6+ ประโยค</div>
+            <div class="funnel-track"><div class="funnel-fill" style="width:50%; background: linear-gradient(90deg, var(--gold), var(--warm));">50%</div></div>
+            <div class="funnel-count">14 คน</div>
+          </div>
+          <div class="funnel-row">
+            <div class="funnel-label"><span class="icon">💬</span>คุย 8+ ประโยค</div>
+            <div class="funnel-track"><div class="funnel-fill" style="width:39%; background: linear-gradient(90deg, var(--warm), #B8884F);">39%</div></div>
+            <div class="funnel-count">11 คน</div>
+          </div>
+          <div class="funnel-row">
+            <div class="funnel-label"><span class="icon">🗣</span>คุย 10+ ประโยค</div>
+            <div class="funnel-track"><div class="funnel-fill" style="width:32%; background: linear-gradient(90deg, #B8884F, var(--sage));">32%</div></div>
+            <div class="funnel-count">9 คน</div>
+          </div>
+          <div class="funnel-row" style="border-top: 1px dashed var(--line); padding-top: 14px; margin-top: 8px;">
+            <div class="funnel-label font-bold text-[var(--rg-deep)]"><span class="icon">📞</span><b>ให้เบอร์</b></div>
+            <div class="funnel-track"><div class="funnel-fill" style="width:46%; background: linear-gradient(90deg, var(--sage), #5C8060); font-size: 13px;">🎯 46%</div></div>
+            <div class="funnel-count text-lg font-bold text-[var(--sage)]">13 คน</div>
+          </div>
+        </div>
+        <div class="mt-5 p-4 rounded-xl" style="background: var(--cream); border: 1px solid var(--line-soft);">
+          <div class="text-xs font-semibold text-[var(--rg-deep)] mb-1">💡 INSIGHT</div>
+          <div class="text-sm leading-relaxed">
+            Drop-off สูงสุดที่ <b>คุย 6 → 8 ประโยค</b> (50%→39%) · ลูกค้าหายช่วงนี้บ่อยสุด
+            <br/>→ ดูใน "หายเพราะอะไร" ด้านล่างเพื่อหาสาเหตุ
+          </div>
+        </div>
+      </div>
+
+      <!-- RIGHT: Drop-off cards stack -->
+      <div class="space-y-4">
+        <div class="dropoff-card urgent">
+          <div class="flex items-start gap-3">
+            <span class="text-2xl">🔴</span>
+            <div class="flex-1">
+              <div class="text-xs font-semibold text-[var(--hot)] uppercase tracking-wider">ไม่ตอบเลย</div>
+              <div class="num text-3xl font-bold text-[var(--hot)] mt-1">3 <span class="text-base text-[var(--soft)]">คน</span></div>
+              <div class="text-xs text-[var(--soft)] mt-1">ลูกค้าทักมา · เรา <b>ยังไม่ได้ตอบ</b></div>
+            </div>
+          </div>
+          <button class="btn btn-primary mt-3 w-full justify-center" style="background: var(--hot); border-color: var(--hot);">⚠️ เปิด inbox ตอบด่วน</button>
+        </div>
+
+        <div class="dropoff-card cool">
+          <div class="flex items-start gap-3">
+            <span class="text-2xl">🔵</span>
+            <div class="flex-1">
+              <div class="text-xs font-semibold text-[var(--info)] uppercase tracking-wider">ทักแล้วหาย</div>
+              <div class="num text-3xl font-bold text-[var(--info)] mt-1">5 <span class="text-base text-[var(--soft)]">คน</span></div>
+              <div class="text-xs text-[var(--soft)] mt-1">เราตอบแล้ว · ลูกค้า <b>ไม่อ่าน/ไม่ตอบ</b></div>
+            </div>
+          </div>
+          <button class="btn btn-ghost mt-3 w-full justify-center">ดู follow-up list →</button>
+        </div>
+
+        <div class="dropoff-card" style="background: var(--ivory);">
+          <div class="text-xs font-semibold text-[var(--soft)] uppercase tracking-wider mb-2">⏱ Avg First Response</div>
+          <div class="flex items-baseline gap-2">
+            <div class="num text-3xl font-bold text-[var(--rg-deep)]">4.2</div>
+            <div class="text-base text-[var(--soft)]">นาที</div>
+            <span class="pill pill-up ml-auto">target &lt; 5</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== SILENCE TRIGGER ========== -->
+  <section class="max-w-[1280px] mx-auto px-6 py-6">
+    <div class="flex items-center justify-between mb-1">
+      <div class="font-serif text-2xl text-[var(--rg-deepest)]">🔻 ลูกค้าหายเพราะอะไร · Silence Trigger</div>
+      <span class="pill pill-flat">214 รายการ · 7 วัน · เงียบ 24+ ชม.</span>
+    </div>
+    <div class="text-xs text-[var(--soft)] mb-5">AI วิเคราะห์ข้อความสุดท้าย 3 ประโยคก่อนเงียบ · 10 categories</div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      <div class="card p-6">
+        <div class="space-y-2">
+          <div class="bar-row"><div class="bar-label">💰 ราคา</div><div class="bar-track"><div class="bar-fill" style="width:85%; background: var(--dusty);"></div></div><div class="bar-num text-[var(--dusty)]">38% (82)</div></div>
+          <div class="bar-row"><div class="bar-label">📍 โลเคชัน</div><div class="bar-track"><div class="bar-fill" style="width:42%; background: var(--warm);"></div></div><div class="bar-num">18% (39)</div></div>
+          <div class="bar-row"><div class="bar-label">⏰ เวลานัด</div><div class="bar-track"><div class="bar-fill" style="width:30%; background: var(--gold);"></div></div><div class="bar-num">12% (26)</div></div>
+          <div class="bar-row"><div class="bar-label">🩺 บริการ</div><div class="bar-track"><div class="bar-fill" style="width:22%; background: var(--rg-light);"></div></div><div class="bar-num">9% (19)</div></div>
+          <div class="bar-row"><div class="bar-label">💸 ขอลด</div><div class="bar-track"><div class="bar-fill" style="width:18%; background: var(--rg-mid);"></div></div><div class="bar-num">8% (17)</div></div>
+          <div class="bar-row"><div class="bar-label">👨‍⚕️ หมอ</div><div class="bar-track"><div class="bar-fill" style="width:14%; background: var(--info);"></div></div><div class="bar-num">6% (13)</div></div>
+          <div class="bar-row"><div class="bar-label">🛡 ปลอดภัย</div><div class="bar-track"><div class="bar-fill" style="width:11%; background: #8B5C7E;"></div></div><div class="bar-num">5% (11)</div></div>
+          <div class="bar-row"><div class="bar-label">⏳ ขอคิดดูก่อน</div><div class="bar-track"><div class="bar-fill" style="width:9%; background: #6B7F4A;"></div></div><div class="bar-num">4% (9)</div></div>
+          <div class="bar-row"><div class="bar-label">📆 รอโปรโม</div><div class="bar-track"><div class="bar-fill" style="width:7%; background: var(--rg-pale);"></div></div><div class="bar-num">3% (6)</div></div>
+          <div class="bar-row"><div class="bar-label">🤔 อื่นๆ</div><div class="bar-track"><div class="bar-fill" style="width:13%; background: var(--gray);"></div></div><div class="bar-num">6% (12)</div></div>
+        </div>
+      </div>
+
+      <div class="space-y-4">
+        <div class="card p-5">
+          <div class="text-xs font-semibold text-[var(--rg-deep)] mb-2 uppercase tracking-wider">💡 ปัญหาอันดับ 1</div>
+          <div class="font-serif text-xl text-[var(--rg-deepest)] mb-2">38% หายเพราะ <b>ราคา</b></div>
+          <div class="text-sm text-[var(--soft)] leading-relaxed mb-3">82 จาก 214 คน เงียบหลังเห็นราคา · ราคาเฉลี่ยที่ทำให้หาย: <b class="text-[var(--rg-deep)]">฿12,000+</b></div>
+          <div class="border-t border-[var(--line-soft)] pt-3">
+            <div class="text-xs font-semibold text-[var(--rg-deep)] mb-2">🎯 ลองทำ</div>
+            <ul class="text-sm space-y-1.5 list-disc list-inside text-[var(--charcoal)]">
+              <li>เสนอ <b>0% installment</b> 3-6 เดือน</li>
+              <li>Pre-qualify งบลูกค้าก่อนแจ้งราคา</li>
+              <li>สร้างโปรเริ่มต้น ฿8,990</li>
+            </ul>
+          </div>
+        </div>
+        <div class="card p-5">
+          <div class="text-xs font-semibold text-[var(--rg-deep)] mb-2 uppercase tracking-wider">📍 ปัญหาอันดับ 2</div>
+          <div class="font-serif text-lg text-[var(--rg-deepest)] mb-2">18% หายเพราะ <b>โลเคชัน</b></div>
+          <div class="text-sm text-[var(--soft)] leading-relaxed">39 คน · ส่วนใหญ่อยู่นอก กทม. (35%)<br/>→ <b>boost ad รัศมี 5km</b> · หรือเปิดสาขาใหม่</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========== FAQ MOST ASKED ========== -->
+  <section class="max-w-[1280px] mx-auto px-6 py-6">
+    <div class="flex items-center justify-between mb-1">
+      <div class="font-serif text-2xl text-[var(--rg-deepest)]">❓ ถามอะไรบ่อยที่สุด</div>
+      <span class="pill pill-flat">7 วันล่าสุด · 1,420 ข้อความ</span>
+    </div>
+    <div class="text-xs text-[var(--soft)] mb-5">เอาไปสร้าง Quick Reply / Auto-reply / FAQ ในเพจ ได้เลย</div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      <div class="card p-6">
+        <div class="font-serif text-lg text-[var(--rg-deepest)] mb-3">Top 10 คำถาม</div>
+        <div class="faq-row"><div class="faq-num">1</div><div class="flex-1"><b>"ราคาเท่าไหร่"</b><div class="text-xs text-[var(--soft)]">ถาม 312 ครั้ง · 22%</div></div></div>
+        <div class="faq-row"><div class="faq-num">2</div><div class="flex-1"><b>"ที่ตั้งคลินิก / map"</b><div class="text-xs text-[var(--soft)]">ถาม 198 ครั้ง · 14%</div></div></div>
+        <div class="faq-row"><div class="faq-num">3</div><div class="flex-1"><b>"มีโปรโมชั่นอะไรบ้าง"</b><div class="text-xs text-[var(--soft)]">ถาม 156 ครั้ง · 11%</div></div></div>
+        <div class="faq-row"><div class="faq-num">4</div><div class="flex-1"><b>"จองคิว/นัดหมายยังไง"</b><div class="text-xs text-[var(--soft)]">ถาม 142 ครั้ง · 10%</div></div></div>
+        <div class="faq-row"><div class="faq-num">5</div><div class="flex-1"><b>"ใช้เวลาทำกี่นาที"</b><div class="text-xs text-[var(--soft)]">ถาม 124 ครั้ง · 9%</div></div></div>
+        <div class="faq-row"><div class="faq-num">6</div><div class="flex-1"><b>"หมอชื่ออะไร / ประสบการณ์"</b><div class="text-xs text-[var(--soft)]">ถาม 98 ครั้ง · 7%</div></div></div>
+        <div class="faq-row"><div class="faq-num">7</div><div class="flex-1"><b>"ผ่อนได้มั้ย"</b><div class="text-xs text-[var(--soft)]">ถาม 87 ครั้ง · 6%</div></div></div>
+        <div class="faq-row"><div class="faq-num">8</div><div class="flex-1"><b>"เจ็บมั้ย / มีผลข้างเคียง"</b><div class="text-xs text-[var(--soft)]">ถาม 76 ครั้ง · 5%</div></div></div>
+        <div class="faq-row"><div class="faq-num">9</div><div class="flex-1"><b>"อยู่ได้นานกี่เดือน"</b><div class="text-xs text-[var(--soft)]">ถาม 68 ครั้ง · 5%</div></div></div>
+        <div class="faq-row"><div class="faq-num">10</div><div class="flex-1"><b>"เปิดวันไหนบ้าง"</b><div class="text-xs text-[var(--soft)]">ถาม 54 ครั้ง · 4%</div></div></div>
+      </div>
+
+      <div class="card p-6">
+        <div class="font-serif text-lg text-[var(--rg-deepest)] mb-3">💡 Quick Reply ที่ควรสร้าง</div>
+        <div class="space-y-3">
+          <div class="p-4 rounded-xl" style="background: var(--cream); border: 1px solid var(--line-soft);">
+            <div class="flex items-center gap-2 mb-2"><span class="pill pill-info">🔥 priority 1</span><span class="text-xs text-[var(--soft)]">ครอบคลุม 22% ของข้อความ</span></div>
+            <div class="text-sm font-semibold text-[var(--charcoal)] mb-1">📋 ราคา + แพ็คเกจยอดนิยม</div>
+            <div class="text-xs text-[var(--soft)]">ตอบ "ราคาเท่าไหร่" → ส่งราคาเริ่มต้น 3 บริการ + ลิงก์เพจ</div>
+          </div>
+          <div class="p-4 rounded-xl" style="background: var(--cream); border: 1px solid var(--line-soft);">
+            <div class="flex items-center gap-2 mb-2"><span class="pill pill-info">priority 2</span><span class="text-xs text-[var(--soft)]">14%</span></div>
+            <div class="text-sm font-semibold text-[var(--charcoal)] mb-1">📍 ที่ตั้ง + Google Maps + รถเมล์</div>
+            <div class="text-xs text-[var(--soft)]">ตอบ "อยู่ที่ไหน" → ส่ง map link + วิธีเดินทาง</div>
+          </div>
+          <div class="p-4 rounded-xl" style="background: var(--cream); border: 1px solid var(--line-soft);">
+            <div class="flex items-center gap-2 mb-2"><span class="pill pill-info">priority 3</span><span class="text-xs text-[var(--soft)]">11%</span></div>
+            <div class="text-sm font-semibold text-[var(--charcoal)] mb-1">🎁 โปรโมชั่นเดือนนี้</div>
+            <div class="text-xs text-[var(--soft)]">ตอบ "มีโปรอะไร" → catalog โปรปัจจุบัน</div>
+          </div>
+          <div class="p-4 rounded-xl" style="background: var(--cream); border: 1px solid var(--line-soft);">
+            <div class="flex items-center gap-2 mb-2"><span class="pill pill-info">priority 4</span><span class="text-xs text-[var(--soft)]">10%</span></div>
+            <div class="text-sm font-semibold text-[var(--charcoal)] mb-1">📅 ปฏิทินจองคิว</div>
+            <div class="text-xs text-[var(--soft)]">ตอบ "นัดยังไง" → ลิงก์ booking + ขอเบอร์โทร</div>
+          </div>
+        </div>
+        <div class="mt-4 p-4 rounded-xl" style="background: var(--sagebg); border: 1px solid var(--sage);">
+          <div class="text-sm text-[var(--charcoal)] leading-relaxed">
+            ⚡ <b>4 Quick Reply นี้ตอบได้ 57% ของข้อความ</b> · ลด workload ทีมแอดมินครึ่งหนึ่ง
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<!-- ========== FOOTER ========== -->
+<footer class="border-t border-[var(--line)] mt-12">
+  <div class="max-w-[1280px] mx-auto px-6 py-10 text-center">
+    <div class="flex justify-center mb-3">
+      <div class="w-10 h-10 rounded-full overflow-hidden">
+        <img src="https://everly-clinic.onrender.com/assets/logos/everly.png" class="w-full h-full object-cover" alt="" />
+      </div>
+    </div>
+    <div class="font-display text-base lowercase metal">everly</div>
+    <div class="text-xs tracking-[.4em] uppercase mt-1 text-[var(--soft)]">Clinic</div>
+    <hr class="max-w-[60px] mx-auto my-4 border-0 h-px bg-[var(--rg-mid)]" />
+    <div class="stamp">PREPARED BY · นายหัว กรุ๊ป · MAY 2026</div>
+    <div class="text-[10px] text-[var(--soft)] mt-2">⚡ MOCKUP v2 · ข้อมูลจำลอง · 2 tabs · funnel cumulative · silence trigger 10 categories + FAQ</div>
+  </div>
+</footer>
+
+<script>
+document.querySelectorAll('.main-tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const tab = btn.dataset.tab;
+    document.querySelectorAll('.main-tab').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('.tab-pane').forEach(c => c.classList.add('hidden'));
+    document.getElementById(`tab-${tab}`).classList.remove('hidden');
+    window.scrollTo({ top: document.querySelector('.main-tabs').offsetTop - 80, behavior: 'smooth' });
+  });
+});
+</script>
+
+</body>
+</html>

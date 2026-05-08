@@ -620,32 +620,48 @@ def _page_credentials():
     return token, pid
 
 
-def _fetch_first_message_ts(conv_id: str, token: str) -> Optional[int]:
-    """Fetch the chronologically FIRST message of a conversation, return its created_time as unix ts.
-    Returns None on error. Used to determine if a conversation is genuinely "new" within a date range
-    (vs. an old conversation that merely had activity in the range).
+def _fetch_first_message_ts(conv_id: str, token: str, since_ts: Optional[int] = None) -> Optional[int]:
+    """Fetch the chronologically OLDEST message timestamp of a conversation.
+    Returns None on error. Used to determine if a conversation is genuinely "new" within a date range.
+
+    FB Graph /messages returns reverse-chronological by default and IGNORES order params.
+    So we paginate forward until we find the oldest. If `since_ts` is provided, we
+    short-circuit as soon as we encounter ANY message older than since_ts (because that
+    proves the conversation predates the range — exact first ts not needed).
     """
     import requests as _r
+    next_url = f"https://graph.facebook.com/v20.0/{conv_id}/messages"
+    params = {"limit": 100, "fields": "created_time", "access_token": token}
+    oldest_seen: Optional[int] = None
+
     try:
-        r = _r.get(
-            f"https://graph.facebook.com/v20.0/{conv_id}",
-            params={
-                "fields": "messages.limit(1).order(chronological_order){created_time}",
-                "access_token": token,
-            },
-            timeout=10,
-        )
-        if r.status_code != 200:
-            return None
-        data = r.json()
-        msgs = (data.get("messages") or {}).get("data", [])
-        if not msgs:
-            return None
-        ts_str = msgs[0].get("created_time", "")
-        ts_dt = datetime.strptime(ts_str.split("+")[0], "%Y-%m-%dT%H:%M:%S")
-        return int(ts_dt.replace(tzinfo=timezone.utc).timestamp())
+        for _ in range(20):  # up to 2000 msgs per conversation safety cap
+            r = _r.get(next_url, params=params, timeout=15)
+            if r.status_code != 200:
+                return None
+            data = r.json()
+            msgs = data.get("data", [])
+            if not msgs:
+                break
+            for msg in msgs:
+                ts_str = msg.get("created_time", "")
+                try:
+                    ts_dt = datetime.strptime(ts_str.split("+")[0], "%Y-%m-%dT%H:%M:%S")
+                    ts = int(ts_dt.replace(tzinfo=timezone.utc).timestamp())
+                except Exception:
+                    continue
+                if oldest_seen is None or ts < oldest_seen:
+                    oldest_seen = ts
+                # Short-circuit: any msg older than since_ts → conv is old, no need to find exact first
+                if since_ts is not None and ts < since_ts:
+                    return ts
+            next_url = (data.get("paging") or {}).get("next")
+            if not next_url:
+                break
+            params = {}  # next_url contains full querystring
+        return oldest_seen
     except Exception:
-        return None
+        return oldest_seen
 
 
 def _fetch_all_conversations(since_ts: int, until_ts: int, _debug: dict = None) -> list:
@@ -786,7 +802,7 @@ def admin_funnel(
     from concurrent.futures import ThreadPoolExecutor
 
     def _check(c):
-        ts = _fetch_first_message_ts(c["id"], token)
+        ts = _fetch_first_message_ts(c["id"], token, since_ts=s_ts)
         return c, ts
 
     # Parallelize first-message fetch (10 workers ≈ 3-4× faster than sequential)

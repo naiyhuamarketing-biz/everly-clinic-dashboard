@@ -459,6 +459,149 @@ def clear_cache():
     return {"cleared": n}
 
 
+# ── Admin tab: Page Conversations API endpoints ─────────────────
+def _page_credentials():
+    """Page Access Token + Page ID — set in Render env vars."""
+    token = os.getenv("FB_PAGE_TOKEN_EVERLY", "")
+    pid = os.getenv("FB_PAGE_ID_EVERLY", "")
+    return token, pid
+
+
+def _fetch_all_conversations(since_ts: int, until_ts: int) -> list:
+    """Pull all conversations updated within [since_ts, until_ts] (unix seconds).
+    Returns list of conversation dicts with id, message_count, updated_time, link.
+    """
+    import requests as _r
+    token, pid = _page_credentials()
+    if not (token and pid):
+        return []
+
+    out = []
+    url = f"https://graph.facebook.com/v20.0/{pid}/conversations"
+    params = {
+        "fields": "id,message_count,updated_time,link",
+        "limit": 100,
+        "access_token": token,
+    }
+    # paginate up to 10 pages = 1000 conversations max
+    for _ in range(10):
+        resp = _r.get(url, params=params, timeout=20)
+        if resp.status_code != 200:
+            break
+        data = resp.json()
+        for c in data.get("data", []):
+            ut = c.get("updated_time", "")
+            try:
+                # FB returns ISO 8601 like "2026-05-08T11:23:00+0000"
+                ut_dt = datetime.strptime(ut.split("+")[0], "%Y-%m-%dT%H:%M:%S")
+                ut_ts = int(ut_dt.replace(tzinfo=timezone.utc).timestamp())
+            except Exception:
+                continue
+            if ut_ts < since_ts:
+                # conversations sorted desc by updated_time → can break
+                return out
+            if ut_ts <= until_ts:
+                out.append({
+                    "id": c.get("id"),
+                    "message_count": c.get("message_count", 0),
+                    "updated_time": ut,
+                    "link": c.get("link", ""),
+                })
+        # next page
+        next_url = data.get("paging", {}).get("next")
+        if not next_url:
+            break
+        url = next_url
+        params = {}
+    return out
+
+
+@app.get("/api/everly/admin/funnel")
+def admin_funnel(
+    since: Optional[str] = Query(None, description="YYYY-MM-DD; defaults to today"),
+    until: Optional[str] = Query(None, description="YYYY-MM-DD; defaults to today"),
+):
+    """Funnel from real FB Page conversations:
+      ทัก (>=1 msg) → คุย 2+ → 4+ → 6+ → 8+ → 10+ ประโยค
+    Returns counts at each stage + raw conversation list.
+    """
+    today = today_bkk()
+    s = date.fromisoformat(since) if since else today
+    u = date.fromisoformat(until) if until else today
+
+    # Convert to unix seconds in BKK
+    s_dt = datetime.combine(s, datetime.min.time(), tzinfo=BANGKOK_TZ)
+    u_dt = datetime.combine(u, datetime.max.time(), tzinfo=BANGKOK_TZ)
+    s_ts = int(s_dt.timestamp())
+    u_ts = int(u_dt.timestamp())
+
+    token, pid = _page_credentials()
+    if not (token and pid):
+        # Fallback to mock if env vars not set
+        return {
+            "since": s.isoformat(),
+            "until": u.isoformat(),
+            "configured": False,
+            "stages": [
+                {"label": "ทัก", "count": 28, "pct": 100},
+                {"label": "คุย 2+ ประโยค", "count": 22, "pct": 78},
+                {"label": "คุย 4+ ประโยค", "count": 18, "pct": 64},
+                {"label": "คุย 6+ ประโยค", "count": 14, "pct": 50},
+                {"label": "คุย 8+ ประโยค", "count": 11, "pct": 39},
+                {"label": "คุย 10+ ประโยค", "count": 9, "pct": 32},
+                {"label": "ให้เบอร์", "count": 13, "pct": 46, "highlight": True},
+            ],
+            "total_inbox": 28,
+            "no_reply": 3,
+            "ghosted": 5,
+            "avg_first_response_min": 4.2,
+            "stale": True,
+            "warning": "FB_PAGE_TOKEN_EVERLY + FB_PAGE_ID_EVERLY not set — showing mock data",
+        }
+
+    # Live: pull conversations
+    cache_key = f"admin-conv:{s.isoformat()}:{u.isoformat()}"
+    conversations = _cached(cache_key, lambda: _fetch_all_conversations(s_ts, u_ts))
+
+    total = len(conversations)
+    if total == 0:
+        return {
+            "since": s.isoformat(), "until": u.isoformat(),
+            "configured": True, "total_inbox": 0,
+            "stages": [], "no_reply": 0, "ghosted": 0,
+        }
+
+    # Cumulative funnel (each stage counts conversations that reached >= N messages)
+    def count_at(min_msg: int) -> int:
+        return sum(1 for c in conversations if (c.get("message_count") or 0) >= min_msg)
+
+    stages = [
+        {"label": "ทัก", "count": total, "pct": 100, "highlight": False},
+        {"label": "คุย 2+ ประโยค", "count": count_at(2), "pct": round(count_at(2) / total * 100), "highlight": False},
+        {"label": "คุย 4+ ประโยค", "count": count_at(4), "pct": round(count_at(4) / total * 100), "highlight": False},
+        {"label": "คุย 6+ ประโยค", "count": count_at(6), "pct": round(count_at(6) / total * 100), "highlight": False},
+        {"label": "คุย 8+ ประโยค", "count": count_at(8), "pct": round(count_at(8) / total * 100), "highlight": False},
+        {"label": "คุย 10+ ประโยค", "count": count_at(10), "pct": round(count_at(10) / total * 100), "highlight": False},
+    ]
+
+    # No-reply / ghosted classification needs message-level data — for now estimate
+    # No-reply: conversations with only 1 message (customer messaged, page didn't respond)
+    no_reply = sum(1 for c in conversations if (c.get("message_count") or 0) == 1)
+    # Ghosted: 2-3 messages (page replied but customer didn't continue)
+    ghosted = sum(1 for c in conversations if 2 <= (c.get("message_count") or 0) <= 3)
+
+    return {
+        "since": s.isoformat(),
+        "until": u.isoformat(),
+        "configured": True,
+        "total_inbox": total,
+        "stages": stages,
+        "no_reply": no_reply,
+        "ghosted": ghosted,
+        "fetched_at": now_bkk().isoformat(),
+    }
+
+
 @app.get("/api/everly/keepalive")
 def keepalive():
     """Lightweight ping that:

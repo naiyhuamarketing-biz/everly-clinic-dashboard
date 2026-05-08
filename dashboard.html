@@ -1799,15 +1799,80 @@ function renderAll() {
   }
 })();
 
-// Stub: refreshes admin tab. Real implementation will fetch from /api/everly/admin/* endpoints.
-function refreshAdminTab() {
+// Refresh admin tab — fetches funnel from /api/everly/admin/funnel
+async function refreshAdminTab() {
   const since = document.getElementById('ad-since').value;
   const until = document.getElementById('ad-until').value;
-  toast(`📅 ${since} → ${until} · รอเชื่อม FB Pages API`, 'save');
-  // TODO: call /api/everly/admin/funnel?since=&until=
-  // TODO: call /api/everly/admin/silence-trigger?since=&until=
-  // TODO: call /api/everly/admin/faq?since=&until=
+  if (!since || !until) return;
+  try {
+    const data = await apiGet(`/api/everly/admin/funnel?since=${since}&until=${until}`);
+    renderAdminFunnel(data);
+    if (data.warning) {
+      toast(`⚡ ${data.warning.slice(0, 80)}`, 'save');
+    } else {
+      toast(`✓ ${data.total_inbox} conversations · ${since}→${until}`, 'save');
+    }
+  } catch (e) {
+    toast(`✗ ${e.message || 'fetch failed'}`, 'save');
+  }
 }
+
+function renderAdminFunnel(d) {
+  const total = d.total_inbox || 0;
+  // Update each funnel-row by finding the labels (work on the visible bars)
+  const funnelSection = document.getElementById('sec-funnel');
+  if (!funnelSection) return;
+  const rows = funnelSection.querySelectorAll('.funnel-row');
+  // Rows in HTML order: ทัก, คุย 2+, 4+, 6+, 8+, 10+, ให้เบอร์ (last is special)
+  const stagesHtmlOrder = d.stages || [];
+  rows.forEach((row, i) => {
+    const stage = stagesHtmlOrder[i];
+    if (!stage) return;
+    const fill = row.querySelector('.funnel-fill');
+    const count = row.querySelector('.funnel-count');
+    if (fill) {
+      fill.style.width = stage.pct + '%';
+      if (stage.highlight) {
+        fill.textContent = `🎯 ${stage.pct}%`;
+      } else {
+        fill.textContent = stage.pct + '%';
+      }
+    }
+    if (count) {
+      count.innerHTML = `${stage.count.toLocaleString('th-TH')} <span class="text-[var(--soft)] text-xs">คน</span>`.replace('<span class', '<span style="font-size:11px;color:var(--soft)" class') ;
+      count.textContent = stage.count.toLocaleString('th-TH') + ' คน';
+    }
+  });
+
+  // Update drop-off cards (no-reply / ghosted)
+  const dropoffs = funnelSection.querySelectorAll('.dropoff-card');
+  if (dropoffs[0]) {
+    const num = dropoffs[0].querySelector('.num');
+    if (num) num.innerHTML = (d.no_reply || 0) + ' <span class="text-base" style="color:var(--soft)">คน</span>';
+  }
+  if (dropoffs[1]) {
+    const num = dropoffs[1].querySelector('.num');
+    if (num) num.innerHTML = (d.ghosted || 0) + ' <span class="text-base" style="color:var(--soft)">คน</span>';
+  }
+
+  // Update section meta
+  const meta = funnelSection.querySelector('.sec-meta');
+  if (meta) {
+    const tag = d.configured ? '✅ LIVE' : '⚡ MOCK';
+    meta.innerHTML = `${tag} · ${d.since} → ${d.until} · ${total} conversations · % คิดจาก ${total}`;
+  }
+}
+
+// Auto-fetch funnel when admin tab is opened for the first time
+let _adminLoaded = false;
+document.querySelectorAll('.main-tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    if (btn.dataset.pane === 'admin' && !_adminLoaded) {
+      _adminLoaded = true;
+      setTimeout(refreshAdminTab, 200);
+    }
+  });
+});
 </script>
 
 </body>

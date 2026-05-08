@@ -582,7 +582,7 @@ def admin_funnel(
         }
 
     # Live: pull conversations
-    debug_info = {} if os.getenv("ADMIN_DEBUG") or True else None
+    debug_info = {}
     conversations = _fetch_all_conversations(s_ts, u_ts, _debug=debug_info)
 
     total = len(conversations)
@@ -591,6 +591,7 @@ def admin_funnel(
             "since": s.isoformat(), "until": u.isoformat(),
             "configured": True, "total_inbox": 0,
             "stages": [], "no_reply": 0, "ghosted": 0,
+            "debug": debug_info,
         }
 
     # Cumulative funnel (each stage counts conversations that reached >= N messages)

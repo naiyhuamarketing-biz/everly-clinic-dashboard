@@ -514,25 +514,66 @@ def derive_page_token(payload: dict = Body(...)):
         except Exception as e:
             exchange_error = f"Exception: {e!r}"
 
-    # Step 2: derive page token from /me/accounts (works for both long+short user tokens)
-    # Use /me/accounts (not /{page_id}) because user token from another app may not
-    # have edge to the page directly, but /me/accounts always returns ALL pages user manages.
-    r2 = _r.get(
-        "https://graph.facebook.com/v20.0/me/accounts",
-        params={"access_token": effective_user_token, "fields": "id,name,access_token,tasks"},
-        timeout=15,
-    )
-    if r2.status_code != 200:
-        raise HTTPException(502, f"/me/accounts fetch failed: {r2.text[:300]}")
-    accounts = r2.json().get("data", [])
-    matching = next((p for p in accounts if str(p.get("id")) == str(page_id)), None)
-    if not matching:
-        page_list = [{"id": p.get("id"), "name": p.get("name")} for p in accounts]
-        raise HTTPException(404, f"Page {page_id} not in user's managed pages. Available: {page_list}")
-    page_token = matching.get("access_token")
+    # Step 2: derive page token. Try multiple paths because:
+    #   - Classic Pages: /me/accounts returns the page
+    #   - New Pages Experience (NPE): /me/accounts may return [], use /{page_id} direct
+    #   - Some Business-owned pages: only accessible via /{page_id}?fields=access_token
+    page_token = None
+    page_name = ""
+    derive_path = ""
+    accounts_count = 0
+    accounts_error = ""
+    direct_error = ""
+
+    # Path A: /me/accounts (classic pages)
+    try:
+        r2 = _r.get(
+            "https://graph.facebook.com/v20.0/me/accounts",
+            params={"access_token": effective_user_token, "fields": "id,name,access_token"},
+            timeout=15,
+        )
+        if r2.status_code == 200:
+            accounts = r2.json().get("data", [])
+            accounts_count = len(accounts)
+            matching = next((p for p in accounts if str(p.get("id")) == str(page_id)), None)
+            if matching and matching.get("access_token"):
+                page_token = matching["access_token"]
+                page_name = matching.get("name", "")
+                derive_path = "/me/accounts"
+        else:
+            accounts_error = f"HTTP {r2.status_code}: {r2.text[:200]}"
+    except Exception as e:
+        accounts_error = f"Exception: {e!r}"
+
+    # Path B: /{page_id}?fields=access_token,name (NPE / Business-owned)
     if not page_token:
-        raise HTTPException(502, "Page returned but access_token missing — check pages_show_list permission")
-    page_name = matching.get("name", "")
+        try:
+            r3 = _r.get(
+                f"https://graph.facebook.com/v20.0/{page_id}",
+                params={"access_token": effective_user_token, "fields": "id,name,access_token"},
+                timeout=15,
+            )
+            if r3.status_code == 200:
+                pdata = r3.json()
+                if pdata.get("access_token"):
+                    page_token = pdata["access_token"]
+                    page_name = pdata.get("name", "")
+                    derive_path = f"/{page_id} direct"
+                else:
+                    direct_error = f"Page returned but no access_token in response: {list(pdata.keys())}"
+            else:
+                direct_error = f"HTTP {r3.status_code}: {r3.text[:200]}"
+        except Exception as e:
+            direct_error = f"Exception: {e!r}"
+
+    if not page_token:
+        raise HTTPException(404, (
+            f"Could not derive page token for page {page_id}. "
+            f"Tried /me/accounts (returned {accounts_count} pages, error: {accounts_error or 'none'}) "
+            f"and /{page_id} direct (error: {direct_error or 'none'}). "
+            "Likely cause: user token is from a profile that does not have admin role on this page, "
+            "OR the page is in 'New Pages Experience' and requires pages_manage_metadata permission."
+        ))
 
     # Step 3: Verify by calling conversations
     r3 = _r.get(
@@ -555,6 +596,7 @@ def derive_page_token(payload: dict = Body(...)):
         "page_token_suffix": page_token[-12:],
         "page_token_len": len(page_token),
         "long_lived": long_lived,
+        "derive_path": derive_path,
         "exchange_attempted": exchange_attempted,
         "exchange_ok": exchange_ok,
         "exchange_error": exchange_error,

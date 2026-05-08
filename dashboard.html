@@ -295,6 +295,57 @@
     .no-print { display: none !important; }
     details.section { box-shadow: none; border: 1px solid var(--line); page-break-inside: avoid; }
   }
+
+  /* ============ Main Tab Switcher (Ads / Admin) ============ */
+  .main-tabs {
+    display: flex; gap: 4px; background: var(--ivory); padding: 5px;
+    border-radius: 999px; border: 1px solid var(--line);
+    max-width: 460px; margin: 24px auto 8px auto;
+    box-shadow: 0 1px 0 rgba(255,255,255,.4) inset;
+  }
+  .main-tab {
+    flex: 1; padding: 11px 18px; border-radius: 999px; font-size: 13px;
+    font-weight: 500; color: var(--soft); cursor: pointer; transition: all .2s;
+    letter-spacing: .02em; display: flex; align-items: center; justify-content: center;
+    gap: 8px; user-select: none;
+  }
+  .main-tab:hover { color: var(--rg-deep); }
+  .main-tab.active {
+    background: var(--rg-deep); color: var(--ivory);
+    box-shadow: 0 4px 12px -4px rgba(58,31,18,.35);
+  }
+
+  /* Demo banner for Admin tab */
+  .demo-banner {
+    background: linear-gradient(90deg, var(--cream), var(--ivory));
+    border: 1px dashed var(--rg-pale); border-radius: 14px;
+    padding: 14px 20px; margin: 20px auto; max-width: 1320px;
+    display: flex; align-items: center; gap: 12px;
+  }
+
+  /* ============ ADMIN TAB STYLES ============ */
+  .funnel-row { display: flex; align-items: center; gap: 14px; padding: 8px 0; }
+  .funnel-label { width: 130px; font-size: 13px; color: var(--soft); display: flex; align-items: center; gap: 8px; }
+  .funnel-label .icon { font-size: 16px; }
+  .funnel-track { flex: 1; height: 28px; background: var(--cream); border-radius: 6px; position: relative; overflow: hidden; }
+  .funnel-fill { position: absolute; inset: 0; border-radius: 6px; display: flex; align-items: center; padding-left: 10px; color: white; font-weight: 600; font-size: 12px; }
+  .funnel-count { width: 110px; text-align: right; font-family: 'Cormorant Garamond'; font-variant-numeric: tabular-nums lining-nums; }
+
+  .dropoff-card { padding: 18px; border-radius: 14px; border: 1px solid var(--line); position: relative; }
+  .dropoff-card.urgent { background: linear-gradient(135deg, #FEEAEA 0%, var(--ivory) 60%); border-color: #C53030; }
+  .dropoff-card.cool { background: linear-gradient(135deg, #E8EEF4 0%, var(--ivory) 60%); border-color: #4A6F8F; }
+
+  .bar-row { display: flex; align-items: center; gap: 10px; padding: 5px 0; font-size: 13px; }
+  .bar-label { width: 130px; }
+  .bar-track { flex: 1; height: 22px; background: var(--cream); border-radius: 4px; position: relative; }
+  .bar-fill { position: absolute; inset: 0; border-radius: 4px; }
+  .bar-num { width: 90px; text-align: right; font-family: 'Cormorant Garamond'; font-variant-numeric: tabular-nums lining-nums; font-weight: 600; }
+
+  .faq-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px dashed var(--line-soft); }
+  .faq-row:last-child { border-bottom: none; }
+  .faq-num { font-family: 'Italiana'; font-size: 18px; color: var(--gold); width: 30px; }
+
+  .pill-info { background: #E8EEF4; color: #4A6F8F; }
 </style>
 </head>
 <body>
@@ -384,6 +435,17 @@
     </div>
   </div>
 </section>
+
+<!-- ============ MAIN TAB SWITCHER ============ -->
+<section class="max-w-[1400px] mx-auto px-8 no-print">
+  <div class="main-tabs">
+    <div class="main-tab active" data-pane="ads">📊 ทีม Ads</div>
+    <div class="main-tab" data-pane="admin">💬 ทีม Admin</div>
+  </div>
+</section>
+
+<!-- ============ TAB PANE: ทีม Ads (5 sections existing live) ============ -->
+<div id="tab-ads-pane">
 
 <!-- ============================================================
      SECTION 01 · PERFORMANCE OVERVIEW (LIVE)
@@ -633,6 +695,238 @@
     </div>
   </details>
 </section>
+
+</div><!-- /tab-ads-pane -->
+
+<!-- ============ TAB PANE: ทีม Admin (DEMO data — to wire) ============ -->
+<div id="tab-admin-pane" class="hidden">
+
+  <div class="demo-banner max-w-[1400px]">
+    <span class="text-2xl">⚡</span>
+    <div class="flex-1">
+      <div class="text-sm font-semibold text-[var(--rg-deep)]">ส่วนนี้ยังเป็นข้อมูลจำลอง (Demo)</div>
+      <div class="text-xs mt-0.5" style="color:var(--soft)">รอเชื่อม FB Pages Conversations API + AI classification (ขั้นต่อไป) · ตัวเลขด้านล่างเป็นตัวอย่างเพื่อรีวิวดีไซน์</div>
+    </div>
+  </div>
+
+  <!-- ── FUNNEL ── -->
+  <section class="max-w-[1400px] mx-auto px-8 pt-2 pb-6">
+    <details class="section" id="sec-funnel" open>
+      <summary>
+        <div>
+          <div class="sec-eyebrow">Funnel</div>
+          <div class="sec-title">Funnel · วันนี้</div>
+          <div class="sec-meta">จากทักจนได้เบอร์ · cumulative · % คิดจากคนทักทั้งหมด</div>
+        </div>
+        <div class="chev">▾</div>
+      </summary>
+      <div class="section-body">
+        <div class="hairline mb-6"></div>
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+          <div class="card p-6 lg:col-span-2">
+            <div class="space-y-1">
+              <div class="funnel-row">
+                <div class="funnel-label"><span class="icon">📨</span><b>ทัก</b></div>
+                <div class="funnel-track"><div class="funnel-fill" style="width:100%; background: linear-gradient(90deg, var(--rg-deep), var(--rg-mid));">100%</div></div>
+                <div class="funnel-count text-lg font-bold">28 คน</div>
+              </div>
+              <div class="funnel-row">
+                <div class="funnel-label"><span class="icon">💬</span>คุย 2+ ประโยค</div>
+                <div class="funnel-track"><div class="funnel-fill" style="width:78%; background: linear-gradient(90deg, var(--rg-mid), var(--rg-light));">78%</div></div>
+                <div class="funnel-count">22 คน</div>
+              </div>
+              <div class="funnel-row">
+                <div class="funnel-label"><span class="icon">💬</span>คุย 4+ ประโยค</div>
+                <div class="funnel-track"><div class="funnel-fill" style="width:64%; background: linear-gradient(90deg, var(--rg-light), var(--gold));">64%</div></div>
+                <div class="funnel-count">18 คน</div>
+              </div>
+              <div class="funnel-row">
+                <div class="funnel-label"><span class="icon">💬</span>คุย 6+ ประโยค</div>
+                <div class="funnel-track"><div class="funnel-fill" style="width:50%; background: linear-gradient(90deg, var(--gold), var(--warm));">50%</div></div>
+                <div class="funnel-count">14 คน</div>
+              </div>
+              <div class="funnel-row">
+                <div class="funnel-label"><span class="icon">💬</span>คุย 8+ ประโยค</div>
+                <div class="funnel-track"><div class="funnel-fill" style="width:39%; background: linear-gradient(90deg, var(--warm), #B8884F);">39%</div></div>
+                <div class="funnel-count">11 คน</div>
+              </div>
+              <div class="funnel-row">
+                <div class="funnel-label"><span class="icon">🗣</span>คุย 10+ ประโยค</div>
+                <div class="funnel-track"><div class="funnel-fill" style="width:32%; background: linear-gradient(90deg, #B8884F, var(--sage));">32%</div></div>
+                <div class="funnel-count">9 คน</div>
+              </div>
+              <div class="funnel-row" style="border-top: 1px dashed var(--line); padding-top: 14px; margin-top: 8px;">
+                <div class="funnel-label font-bold" style="color:var(--rg-deep)"><span class="icon">📞</span><b>ให้เบอร์</b></div>
+                <div class="funnel-track"><div class="funnel-fill" style="width:46%; background: linear-gradient(90deg, var(--sage), #5C8060); font-size: 13px;">🎯 46%</div></div>
+                <div class="funnel-count text-lg font-bold" style="color:var(--sage)">13 คน</div>
+              </div>
+            </div>
+            <div class="mt-5 p-4 rounded-xl" style="background: var(--cream); border: 1px solid var(--line-soft);">
+              <div class="text-xs font-semibold mb-1" style="color:var(--rg-deep)">💡 INSIGHT</div>
+              <div class="text-sm leading-relaxed">
+                Drop-off สูงสุดที่ <b>คุย 6 → 8 ประโยค</b> (50%→39%) · ลูกค้าหายช่วงนี้บ่อยสุด<br/>
+                → ดูใน "หายเพราะอะไร" ด้านล่างเพื่อหาสาเหตุ
+              </div>
+            </div>
+          </div>
+
+          <div class="space-y-4">
+            <div class="dropoff-card urgent">
+              <div class="flex items-start gap-3">
+                <span class="text-2xl">🔴</span>
+                <div class="flex-1">
+                  <div class="text-xs font-semibold uppercase tracking-wider" style="color:#C53030">ไม่ตอบเลย</div>
+                  <div class="num text-3xl font-bold mt-1" style="color:#C53030">3 <span class="text-base" style="color:var(--soft)">คน</span></div>
+                  <div class="text-xs mt-1" style="color:var(--soft)">ลูกค้าทักมา · เรา <b>ยังไม่ได้ตอบ</b></div>
+                </div>
+              </div>
+              <button class="btn btn-primary mt-3 w-full" style="background:#C53030; border-color:#C53030; justify-content:center">⚠️ เปิด inbox ตอบด่วน</button>
+            </div>
+
+            <div class="dropoff-card cool">
+              <div class="flex items-start gap-3">
+                <span class="text-2xl">🔵</span>
+                <div class="flex-1">
+                  <div class="text-xs font-semibold uppercase tracking-wider" style="color:#4A6F8F">ทักแล้วหาย</div>
+                  <div class="num text-3xl font-bold mt-1" style="color:#4A6F8F">5 <span class="text-base" style="color:var(--soft)">คน</span></div>
+                  <div class="text-xs mt-1" style="color:var(--soft)">เราตอบแล้ว · ลูกค้า <b>ไม่อ่าน/ไม่ตอบ</b></div>
+                </div>
+              </div>
+              <button class="btn btn-ghost mt-3 w-full" style="justify-content:center">ดู follow-up list →</button>
+            </div>
+
+            <div class="dropoff-card" style="background: var(--ivory);">
+              <div class="text-xs font-semibold uppercase tracking-wider mb-2" style="color:var(--soft)">⏱ Avg First Response</div>
+              <div class="flex items-baseline gap-2">
+                <div class="num text-3xl font-bold" style="color:var(--rg-deep)">4.2</div>
+                <div class="text-base" style="color:var(--soft)">นาที</div>
+                <span class="pill pill-rg ml-auto" style="background:#E8EFE8; color:#7A9E7E">target &lt; 5</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </details>
+  </section>
+
+  <!-- ── SILENCE TRIGGER ── -->
+  <section class="max-w-[1400px] mx-auto px-8 pt-2 pb-6">
+    <details class="section" id="sec-silence" open>
+      <summary>
+        <div>
+          <div class="sec-eyebrow">Silence Trigger</div>
+          <div class="sec-title">🔻 ลูกค้าหายเพราะอะไร</div>
+          <div class="sec-meta">214 รายการ · 7 วัน · เงียบ 24+ ชม. · AI วิเคราะห์ข้อความ 3 ประโยคก่อนเงียบ · 10 categories</div>
+        </div>
+        <div class="chev">▾</div>
+      </summary>
+      <div class="section-body">
+        <div class="hairline mb-6"></div>
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          <div class="card p-6">
+            <div class="space-y-2">
+              <div class="bar-row"><div class="bar-label">💰 ราคา</div><div class="bar-track"><div class="bar-fill" style="width:85%; background:#A85C4E;"></div></div><div class="bar-num" style="color:#A85C4E">38% (82)</div></div>
+              <div class="bar-row"><div class="bar-label">📍 โลเคชัน</div><div class="bar-track"><div class="bar-fill" style="width:42%; background: var(--warm);"></div></div><div class="bar-num">18% (39)</div></div>
+              <div class="bar-row"><div class="bar-label">⏰ เวลานัด</div><div class="bar-track"><div class="bar-fill" style="width:30%; background: var(--gold);"></div></div><div class="bar-num">12% (26)</div></div>
+              <div class="bar-row"><div class="bar-label">🩺 บริการ</div><div class="bar-track"><div class="bar-fill" style="width:22%; background: var(--rg-light);"></div></div><div class="bar-num">9% (19)</div></div>
+              <div class="bar-row"><div class="bar-label">💸 ขอลด</div><div class="bar-track"><div class="bar-fill" style="width:18%; background: var(--rg-mid);"></div></div><div class="bar-num">8% (17)</div></div>
+              <div class="bar-row"><div class="bar-label">👨‍⚕️ หมอ</div><div class="bar-track"><div class="bar-fill" style="width:14%; background:#4A6F8F;"></div></div><div class="bar-num">6% (13)</div></div>
+              <div class="bar-row"><div class="bar-label">🛡 ปลอดภัย</div><div class="bar-track"><div class="bar-fill" style="width:11%; background:#8B5C7E;"></div></div><div class="bar-num">5% (11)</div></div>
+              <div class="bar-row"><div class="bar-label">⏳ ขอคิดดูก่อน</div><div class="bar-track"><div class="bar-fill" style="width:9%; background:#6B7F4A;"></div></div><div class="bar-num">4% (9)</div></div>
+              <div class="bar-row"><div class="bar-label">📆 รอโปรโม</div><div class="bar-track"><div class="bar-fill" style="width:7%; background: var(--rg-pale);"></div></div><div class="bar-num">3% (6)</div></div>
+              <div class="bar-row"><div class="bar-label">🤔 อื่นๆ</div><div class="bar-track"><div class="bar-fill" style="width:13%; background: var(--gray);"></div></div><div class="bar-num">6% (12)</div></div>
+            </div>
+          </div>
+
+          <div class="space-y-4">
+            <div class="card p-5">
+              <div class="text-xs font-semibold mb-2 uppercase tracking-wider" style="color:var(--rg-deep)">💡 ปัญหาอันดับ 1</div>
+              <div class="font-serif text-xl mb-2" style="color:var(--rg-deepest)">38% หายเพราะ <b>ราคา</b></div>
+              <div class="text-sm leading-relaxed mb-3" style="color:var(--soft)">82 จาก 214 คน เงียบหลังเห็นราคา · ราคาเฉลี่ยที่ทำให้หาย: <b style="color:var(--rg-deep)">฿12,000+</b></div>
+              <div class="border-t pt-3" style="border-color:var(--line-soft)">
+                <div class="text-xs font-semibold mb-2" style="color:var(--rg-deep)">🎯 ลองทำ</div>
+                <ul class="text-sm space-y-1.5 list-disc list-inside">
+                  <li>เสนอ <b>0% installment</b> 3-6 เดือน</li>
+                  <li>Pre-qualify งบลูกค้าก่อนแจ้งราคา</li>
+                  <li>สร้างโปรเริ่มต้น ฿8,990</li>
+                </ul>
+              </div>
+            </div>
+            <div class="card p-5">
+              <div class="text-xs font-semibold mb-2 uppercase tracking-wider" style="color:var(--rg-deep)">📍 ปัญหาอันดับ 2</div>
+              <div class="font-serif text-lg mb-2" style="color:var(--rg-deepest)">18% หายเพราะ <b>โลเคชัน</b></div>
+              <div class="text-sm leading-relaxed" style="color:var(--soft)">39 คน · ส่วนใหญ่อยู่นอก กทม. (35%)<br/>→ <b>boost ad รัศมี 5km</b> · หรือเปิดสาขาใหม่</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </details>
+  </section>
+
+  <!-- ── FAQ ── -->
+  <section class="max-w-[1400px] mx-auto px-8 pt-2 pb-16">
+    <details class="section" id="sec-faq" open>
+      <summary>
+        <div>
+          <div class="sec-eyebrow">FAQ Patterns</div>
+          <div class="sec-title">❓ ถามอะไรบ่อยที่สุด</div>
+          <div class="sec-meta">7 วันล่าสุด · 1,420 ข้อความ · เอาไปสร้าง Quick Reply / Auto-reply / FAQ ในเพจได้</div>
+        </div>
+        <div class="chev">▾</div>
+      </summary>
+      <div class="section-body">
+        <div class="hairline mb-6"></div>
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          <div class="card p-6">
+            <div class="font-serif text-lg mb-3" style="color:var(--rg-deepest)">Top 10 คำถาม</div>
+            <div class="faq-row"><div class="faq-num">1</div><div class="flex-1"><b>"ราคาเท่าไหร่"</b><div class="text-xs" style="color:var(--soft)">ถาม 312 ครั้ง · 22%</div></div></div>
+            <div class="faq-row"><div class="faq-num">2</div><div class="flex-1"><b>"ที่ตั้งคลินิก / map"</b><div class="text-xs" style="color:var(--soft)">ถาม 198 ครั้ง · 14%</div></div></div>
+            <div class="faq-row"><div class="faq-num">3</div><div class="flex-1"><b>"มีโปรโมชั่นอะไรบ้าง"</b><div class="text-xs" style="color:var(--soft)">ถาม 156 ครั้ง · 11%</div></div></div>
+            <div class="faq-row"><div class="faq-num">4</div><div class="flex-1"><b>"จองคิว/นัดหมายยังไง"</b><div class="text-xs" style="color:var(--soft)">ถาม 142 ครั้ง · 10%</div></div></div>
+            <div class="faq-row"><div class="faq-num">5</div><div class="flex-1"><b>"ใช้เวลาทำกี่นาที"</b><div class="text-xs" style="color:var(--soft)">ถาม 124 ครั้ง · 9%</div></div></div>
+            <div class="faq-row"><div class="faq-num">6</div><div class="flex-1"><b>"หมอชื่ออะไร / ประสบการณ์"</b><div class="text-xs" style="color:var(--soft)">ถาม 98 ครั้ง · 7%</div></div></div>
+            <div class="faq-row"><div class="faq-num">7</div><div class="flex-1"><b>"ผ่อนได้มั้ย"</b><div class="text-xs" style="color:var(--soft)">ถาม 87 ครั้ง · 6%</div></div></div>
+            <div class="faq-row"><div class="faq-num">8</div><div class="flex-1"><b>"เจ็บมั้ย / มีผลข้างเคียง"</b><div class="text-xs" style="color:var(--soft)">ถาม 76 ครั้ง · 5%</div></div></div>
+            <div class="faq-row"><div class="faq-num">9</div><div class="flex-1"><b>"อยู่ได้นานกี่เดือน"</b><div class="text-xs" style="color:var(--soft)">ถาม 68 ครั้ง · 5%</div></div></div>
+            <div class="faq-row"><div class="faq-num">10</div><div class="flex-1"><b>"เปิดวันไหนบ้าง"</b><div class="text-xs" style="color:var(--soft)">ถาม 54 ครั้ง · 4%</div></div></div>
+          </div>
+
+          <div class="card p-6">
+            <div class="font-serif text-lg mb-3" style="color:var(--rg-deepest)">💡 Quick Reply ที่ควรสร้าง</div>
+            <div class="space-y-3">
+              <div class="p-4 rounded-xl" style="background: var(--cream); border: 1px solid var(--line-soft);">
+                <div class="flex items-center gap-2 mb-2"><span class="pill pill-info">🔥 priority 1</span><span class="text-xs" style="color:var(--soft)">22% ของข้อความ</span></div>
+                <div class="text-sm font-semibold mb-1">📋 ราคา + แพ็คเกจยอดนิยม</div>
+                <div class="text-xs" style="color:var(--soft)">ตอบ "ราคาเท่าไหร่" → ส่งราคาเริ่มต้น 3 บริการ + ลิงก์เพจ</div>
+              </div>
+              <div class="p-4 rounded-xl" style="background: var(--cream); border: 1px solid var(--line-soft);">
+                <div class="flex items-center gap-2 mb-2"><span class="pill pill-info">priority 2</span><span class="text-xs" style="color:var(--soft)">14%</span></div>
+                <div class="text-sm font-semibold mb-1">📍 ที่ตั้ง + Google Maps</div>
+                <div class="text-xs" style="color:var(--soft)">ตอบ "อยู่ที่ไหน" → ส่ง map link + วิธีเดินทาง</div>
+              </div>
+              <div class="p-4 rounded-xl" style="background: var(--cream); border: 1px solid var(--line-soft);">
+                <div class="flex items-center gap-2 mb-2"><span class="pill pill-info">priority 3</span><span class="text-xs" style="color:var(--soft)">11%</span></div>
+                <div class="text-sm font-semibold mb-1">🎁 โปรโมชั่นเดือนนี้</div>
+                <div class="text-xs" style="color:var(--soft)">ตอบ "มีโปรอะไร" → catalog โปรปัจจุบัน</div>
+              </div>
+              <div class="p-4 rounded-xl" style="background: var(--cream); border: 1px solid var(--line-soft);">
+                <div class="flex items-center gap-2 mb-2"><span class="pill pill-info">priority 4</span><span class="text-xs" style="color:var(--soft)">10%</span></div>
+                <div class="text-sm font-semibold mb-1">📅 ปฏิทินจองคิว</div>
+                <div class="text-xs" style="color:var(--soft)">ตอบ "นัดยังไง" → ลิงก์ booking + ขอเบอร์โทร</div>
+              </div>
+            </div>
+            <div class="mt-4 p-4 rounded-xl" style="background:#E8EFE8; border: 1px solid #7A9E7E;">
+              <div class="text-sm leading-relaxed">
+                ⚡ <b>4 Quick Reply นี้ตอบได้ 57% ของข้อความ</b> · ลด workload ทีมแอดมินครึ่งหนึ่ง
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </details>
+  </section>
+
+</div><!-- /tab-admin-pane -->
 
 <!-- ===== FOOTER ===== -->
 <footer class="border-t" style="border-color:var(--line)">
@@ -1459,6 +1753,18 @@ function renderAll() {
     if (ok) { _loaded.overview = true; fetchOverview(); }
     else setLive('ov', false);
   }, 200);
+
+  // ============= MAIN TAB SWITCHER (Ads / Admin) =============
+  document.querySelectorAll('.main-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const pane = btn.dataset.pane;
+      document.querySelectorAll('.main-tab').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('tab-ads-pane').classList.toggle('hidden', pane !== 'ads');
+      document.getElementById('tab-admin-pane').classList.toggle('hidden', pane !== 'admin');
+      window.scrollTo({ top: document.querySelector('.main-tabs').offsetTop - 20, behavior: 'smooth' });
+    });
+  });
 })();
 </script>
 

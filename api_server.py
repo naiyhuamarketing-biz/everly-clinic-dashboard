@@ -510,31 +510,60 @@ def _try_auto_refresh_page_token() -> Optional[str]:
 
 
 @app.post("/api/everly/admin/bootstrap")
-def admin_bootstrap(payload: dict = Body(...)):
+async def admin_bootstrap(request: Request):
     """One-call setup: takes a user_token, stores in process memory,
     immediately derives & caches a page_token. Subsequent funnel calls
     will use the cached page_token; if it ever fails, /admin/funnel
     auto-refreshes from the stored user_token.
 
-    User flow:
-      POST {"user_token": "EAA..."} → server caches both, returns status
-      User goes away → server keeps deriving fresh page_tokens as needed
-      Token chain only breaks if user_token itself expires (no auto-refresh
-      yet for user_token; that requires App Live mode or System User).
+    Accepts the user_token from any of:
+      - JSON body: {"user_token": "EAA..."}
+      - Form-encoded body: user_token=EAA...
+      - Text/plain body containing JSON (sendBeacon uses this)
+      - Query string: ?user_token=EAA...
+    Multi-format keeps cross-origin senders (sendBeacon, simple fetch,
+    HTML form POST) working without CORS preflight gymnastics.
     """
-    user_token = (payload.get("user_token") or "").strip()
+    user_token = ""
+    # Try query string first (works even with no body)
+    user_token = (request.query_params.get("user_token") or "").strip()
     if not user_token:
-        raise HTTPException(400, "user_token required")
+        # Try parsing body in priority order
+        body = await request.body()
+        if body:
+            ctype = (request.headers.get("content-type") or "").lower()
+            try:
+                if "application/json" in ctype or body[:1] in (b"{", b"["):
+                    data = json.loads(body)
+                    user_token = (data.get("user_token") if isinstance(data, dict) else "") or ""
+                elif "form-urlencoded" in ctype:
+                    from urllib.parse import parse_qs
+                    data = parse_qs(body.decode("utf-8", errors="ignore"))
+                    user_token = (data.get("user_token") or [""])[0]
+                else:
+                    # Last-resort: try to parse as JSON regardless of content-type
+                    text = body.decode("utf-8", errors="ignore").strip()
+                    if text.startswith("{"):
+                        data = json.loads(text)
+                        if isinstance(data, dict):
+                            user_token = data.get("user_token", "") or ""
+                    elif text.startswith("EAA") and len(text) > 50:
+                        user_token = text  # raw token in body
+            except Exception:
+                pass
+    user_token = (user_token or "").strip()
+    if not user_token:
+        raise HTTPException(400, "user_token required (JSON body, form, query string, or raw text)")
     global _RUNTIME_USER_TOKEN
     _RUNTIME_USER_TOKEN = user_token
     page_token = _try_auto_refresh_page_token()
     return {
         "ok": page_token is not None,
         "user_token_cached": True,
+        "user_token_len": len(user_token),
         "page_token_derived": page_token is not None,
         "page_token_prefix": page_token[:12] if page_token else None,
-        "message": "Funnel will now auto-recover from page-token failures using the cached user_token. "
-                   "If user_token itself expires, dashboard will show ⚠ banner asking for refresh.",
+        "message": "Funnel will now auto-recover from page-token failures using the cached user_token.",
     }
 
 

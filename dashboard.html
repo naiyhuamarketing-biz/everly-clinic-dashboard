@@ -897,14 +897,14 @@
     </details>
   </section>
 
-  <!-- ── SILENCE TRIGGER ── -->
+  <!-- ── SILENCE TRIGGER (LIVE from FB Pages API + keyword classifier) ── -->
   <section class="max-w-[1400px] mx-auto px-8 pt-2 pb-6">
     <details class="section" id="sec-silence" open>
       <summary>
         <div>
           <div class="sec-eyebrow">Silence Trigger</div>
           <div class="sec-title">🔻 ลูกค้าหายเพราะอะไร</div>
-          <div class="sec-meta" id="sec-silence-meta">⚡ DEMO · ตัวเลขจำลอง · รอเชื่อม AI classification (Claude API) ใน sprint ถัดไป</div>
+          <div class="sec-meta" id="sec-silence-meta">✅ LIVE · จำแนก ghosted customers ตาม keyword จากข้อความสุดท้าย</div>
         </div>
         <div class="chev">▾</div>
       </summary>
@@ -912,38 +912,21 @@
         <div class="hairline mb-6"></div>
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
           <div class="card p-6">
-            <div class="space-y-2">
-              <div class="bar-row"><div class="bar-label">💰 ราคา</div><div class="bar-track"><div class="bar-fill" style="width:85%; background:#A85C4E;"></div></div><div class="bar-num" style="color:#A85C4E">38% (82)</div></div>
-              <div class="bar-row"><div class="bar-label">📍 โลเคชัน</div><div class="bar-track"><div class="bar-fill" style="width:42%; background: var(--warm);"></div></div><div class="bar-num">18% (39)</div></div>
-              <div class="bar-row"><div class="bar-label">⏰ เวลานัด</div><div class="bar-track"><div class="bar-fill" style="width:30%; background: var(--gold);"></div></div><div class="bar-num">12% (26)</div></div>
-              <div class="bar-row"><div class="bar-label">🩺 บริการ</div><div class="bar-track"><div class="bar-fill" style="width:22%; background: var(--rg-light);"></div></div><div class="bar-num">9% (19)</div></div>
-              <div class="bar-row"><div class="bar-label">💸 ขอลด</div><div class="bar-track"><div class="bar-fill" style="width:18%; background: var(--rg-mid);"></div></div><div class="bar-num">8% (17)</div></div>
-              <div class="bar-row"><div class="bar-label">👨‍⚕️ หมอ</div><div class="bar-track"><div class="bar-fill" style="width:14%; background:#4A6F8F;"></div></div><div class="bar-num">6% (13)</div></div>
-              <div class="bar-row"><div class="bar-label">🛡 ปลอดภัย</div><div class="bar-track"><div class="bar-fill" style="width:11%; background:#8B5C7E;"></div></div><div class="bar-num">5% (11)</div></div>
-              <div class="bar-row"><div class="bar-label">⏳ ขอคิดดูก่อน</div><div class="bar-track"><div class="bar-fill" style="width:9%; background:#6B7F4A;"></div></div><div class="bar-num">4% (9)</div></div>
-              <div class="bar-row"><div class="bar-label">📆 รอโปรโม</div><div class="bar-track"><div class="bar-fill" style="width:7%; background: var(--rg-pale);"></div></div><div class="bar-num">3% (6)</div></div>
-              <div class="bar-row"><div class="bar-label">🤔 อื่นๆ</div><div class="bar-track"><div class="bar-fill" style="width:13%; background: var(--gray);"></div></div><div class="bar-num">6% (12)</div></div>
+            <div id="silence-rows" class="space-y-2">
+              <div class="text-xs" style="color:var(--soft)">กำลังโหลดข้อมูล...</div>
             </div>
           </div>
 
-          <div class="space-y-4">
+          <div class="space-y-4" id="silence-insights">
             <div class="card p-5">
               <div class="text-xs font-semibold mb-2 uppercase tracking-wider" style="color:var(--rg-deep)">💡 ปัญหาอันดับ 1</div>
-              <div class="font-serif text-xl mb-2" style="color:var(--rg-deepest)">38% หายเพราะ <b>ราคา</b></div>
-              <div class="text-sm leading-relaxed mb-3" style="color:var(--soft)">82 จาก 214 คน เงียบหลังเห็นราคา · ราคาเฉลี่ยที่ทำให้หาย: <b style="color:var(--rg-deep)">฿12,000+</b></div>
-              <div class="border-t pt-3" style="border-color:var(--line-soft)">
-                <div class="text-xs font-semibold mb-2" style="color:var(--rg-deep)">🎯 ลองทำ</div>
-                <ul class="text-sm space-y-1.5 list-disc list-inside">
-                  <li>เสนอ <b>0% installment</b> 3-6 เดือน</li>
-                  <li>Pre-qualify งบลูกค้าก่อนแจ้งราคา</li>
-                  <li>สร้างโปรเริ่มต้น ฿8,990</li>
-                </ul>
-              </div>
+              <div class="font-serif text-xl mb-2" style="color:var(--rg-deepest)" id="silence-top1">รอข้อมูล...</div>
+              <div class="text-sm leading-relaxed" style="color:var(--soft)" id="silence-top1-detail">—</div>
             </div>
             <div class="card p-5">
               <div class="text-xs font-semibold mb-2 uppercase tracking-wider" style="color:var(--rg-deep)">📍 ปัญหาอันดับ 2</div>
-              <div class="font-serif text-lg mb-2" style="color:var(--rg-deepest)">18% หายเพราะ <b>โลเคชัน</b></div>
-              <div class="text-sm leading-relaxed" style="color:var(--soft)">39 คน · ส่วนใหญ่อยู่นอก กทม. (35%)<br/>→ <b>boost ad รัศมี 5km</b> · หรือเปิดสาขาใหม่</div>
+              <div class="font-serif text-lg mb-2" style="color:var(--rg-deepest)" id="silence-top2">—</div>
+              <div class="text-sm leading-relaxed" style="color:var(--soft)" id="silence-top2-detail">—</div>
             </div>
           </div>
         </div>
@@ -951,14 +934,14 @@
     </details>
   </section>
 
-  <!-- ── FAQ ── -->
+  <!-- ── FAQ (LIVE from real customer questions) ── -->
   <section class="max-w-[1400px] mx-auto px-8 pt-2 pb-16">
     <details class="section" id="sec-faq" open>
       <summary>
         <div>
           <div class="sec-eyebrow">FAQ Patterns</div>
           <div class="sec-title">❓ ถามอะไรบ่อยที่สุด</div>
-          <div class="sec-meta">7 วันล่าสุด · 1,420 ข้อความ · เอาไปสร้าง Quick Reply / Auto-reply / FAQ ในเพจได้</div>
+          <div class="sec-meta" id="sec-faq-meta">✅ LIVE · จัดกลุ่มคำถามจริงจาก inbox</div>
         </div>
         <div class="chev">▾</div>
       </summary>
@@ -966,47 +949,19 @@
         <div class="hairline mb-6"></div>
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
           <div class="card p-6">
-            <div class="font-serif text-lg mb-3" style="color:var(--rg-deepest)">Top 10 คำถาม</div>
-            <div class="faq-row"><div class="faq-num">1</div><div class="flex-1"><b>"ราคาเท่าไหร่"</b><div class="text-xs" style="color:var(--soft)">ถาม 312 ครั้ง · 22%</div></div></div>
-            <div class="faq-row"><div class="faq-num">2</div><div class="flex-1"><b>"ที่ตั้งคลินิก / map"</b><div class="text-xs" style="color:var(--soft)">ถาม 198 ครั้ง · 14%</div></div></div>
-            <div class="faq-row"><div class="faq-num">3</div><div class="flex-1"><b>"มีโปรโมชั่นอะไรบ้าง"</b><div class="text-xs" style="color:var(--soft)">ถาม 156 ครั้ง · 11%</div></div></div>
-            <div class="faq-row"><div class="faq-num">4</div><div class="flex-1"><b>"จองคิว/นัดหมายยังไง"</b><div class="text-xs" style="color:var(--soft)">ถาม 142 ครั้ง · 10%</div></div></div>
-            <div class="faq-row"><div class="faq-num">5</div><div class="flex-1"><b>"ใช้เวลาทำกี่นาที"</b><div class="text-xs" style="color:var(--soft)">ถาม 124 ครั้ง · 9%</div></div></div>
-            <div class="faq-row"><div class="faq-num">6</div><div class="flex-1"><b>"หมอชื่ออะไร / ประสบการณ์"</b><div class="text-xs" style="color:var(--soft)">ถาม 98 ครั้ง · 7%</div></div></div>
-            <div class="faq-row"><div class="faq-num">7</div><div class="flex-1"><b>"ผ่อนได้มั้ย"</b><div class="text-xs" style="color:var(--soft)">ถาม 87 ครั้ง · 6%</div></div></div>
-            <div class="faq-row"><div class="faq-num">8</div><div class="flex-1"><b>"เจ็บมั้ย / มีผลข้างเคียง"</b><div class="text-xs" style="color:var(--soft)">ถาม 76 ครั้ง · 5%</div></div></div>
-            <div class="faq-row"><div class="faq-num">9</div><div class="flex-1"><b>"อยู่ได้นานกี่เดือน"</b><div class="text-xs" style="color:var(--soft)">ถาม 68 ครั้ง · 5%</div></div></div>
-            <div class="faq-row"><div class="faq-num">10</div><div class="flex-1"><b>"เปิดวันไหนบ้าง"</b><div class="text-xs" style="color:var(--soft)">ถาม 54 ครั้ง · 4%</div></div></div>
+            <div class="font-serif text-lg mb-3" style="color:var(--rg-deepest)">Top คำถาม</div>
+            <div id="faq-rows" class="space-y-1">
+              <div class="text-xs" style="color:var(--soft)">กำลังโหลดข้อมูล...</div>
+            </div>
           </div>
 
           <div class="card p-6">
             <div class="font-serif text-lg mb-3" style="color:var(--rg-deepest)">💡 Quick Reply ที่ควรสร้าง</div>
-            <div class="space-y-3">
-              <div class="p-4 rounded-xl" style="background: var(--cream); border: 1px solid var(--line-soft);">
-                <div class="flex items-center gap-2 mb-2"><span class="pill pill-info">🔥 priority 1</span><span class="text-xs" style="color:var(--soft)">22% ของข้อความ</span></div>
-                <div class="text-sm font-semibold mb-1">📋 ราคา + แพ็คเกจยอดนิยม</div>
-                <div class="text-xs" style="color:var(--soft)">ตอบ "ราคาเท่าไหร่" → ส่งราคาเริ่มต้น 3 บริการ + ลิงก์เพจ</div>
-              </div>
-              <div class="p-4 rounded-xl" style="background: var(--cream); border: 1px solid var(--line-soft);">
-                <div class="flex items-center gap-2 mb-2"><span class="pill pill-info">priority 2</span><span class="text-xs" style="color:var(--soft)">14%</span></div>
-                <div class="text-sm font-semibold mb-1">📍 ที่ตั้ง + Google Maps</div>
-                <div class="text-xs" style="color:var(--soft)">ตอบ "อยู่ที่ไหน" → ส่ง map link + วิธีเดินทาง</div>
-              </div>
-              <div class="p-4 rounded-xl" style="background: var(--cream); border: 1px solid var(--line-soft);">
-                <div class="flex items-center gap-2 mb-2"><span class="pill pill-info">priority 3</span><span class="text-xs" style="color:var(--soft)">11%</span></div>
-                <div class="text-sm font-semibold mb-1">🎁 โปรโมชั่นเดือนนี้</div>
-                <div class="text-xs" style="color:var(--soft)">ตอบ "มีโปรอะไร" → catalog โปรปัจจุบัน</div>
-              </div>
-              <div class="p-4 rounded-xl" style="background: var(--cream); border: 1px solid var(--line-soft);">
-                <div class="flex items-center gap-2 mb-2"><span class="pill pill-info">priority 4</span><span class="text-xs" style="color:var(--soft)">10%</span></div>
-                <div class="text-sm font-semibold mb-1">📅 ปฏิทินจองคิว</div>
-                <div class="text-xs" style="color:var(--soft)">ตอบ "นัดยังไง" → ลิงก์ booking + ขอเบอร์โทร</div>
-              </div>
+            <div class="space-y-3" id="faq-quickreplies">
+              <div class="text-xs" style="color:var(--soft)">รอข้อมูล...</div>
             </div>
-            <div class="mt-4 p-4 rounded-xl" style="background:#E8EFE8; border: 1px solid #7A9E7E;">
-              <div class="text-sm leading-relaxed">
-                ⚡ <b>4 Quick Reply นี้ตอบได้ 57% ของข้อความ</b> · ลด workload ทีมแอดมินครึ่งหนึ่ง
-              </div>
+            <div class="mt-4 p-4 rounded-xl hidden" id="faq-coverage" style="background:#E8EFE8; border: 1px solid #7A9E7E;">
+              <div class="text-sm leading-relaxed" id="faq-coverage-text"></div>
             </div>
           </div>
         </div>
@@ -1992,16 +1947,150 @@ function renderAdminFunnel(d) {
   if (lqPhones) lqPhones.textContent = lq.phones_count ?? 0;
 }
 
+// ── Render Silence Trigger from real API ──
+async function refreshSilenceTrigger() {
+  const since = document.getElementById('ad-since')?.value;
+  const until = document.getElementById('ad-until')?.value;
+  const qs = new URLSearchParams();
+  if (since) qs.set('since', since);
+  if (until) qs.set('until', until);
+  try {
+    const r = await fetch('/api/everly/admin/silence-trigger?' + qs.toString());
+    const d = await r.json();
+    renderSilenceTrigger(d);
+  } catch (e) { console.error('silence-trigger fetch:', e); }
+}
+
+const SILENCE_COLORS = {
+  '💰 ราคา':         '#A85C4E',
+  '📍 โลเคชัน':      'var(--warm)',
+  '⏰ เวลานัด':      'var(--gold)',
+  '💸 ขอลด':        'var(--rg-mid)',
+  '📆 รอโปรโม':     'var(--rg-pale)',
+  '🩺 บริการ':       'var(--rg-light)',
+  '👨‍⚕️ หมอ':         '#4A6F8F',
+  '🛡 ปลอดภัย':      '#8B5C7E',
+  '⏳ ขอคิดดูก่อน': '#6B7F4A',
+  '🤔 อื่นๆ':         'var(--gray)',
+};
+
+function renderSilenceTrigger(d) {
+  const rows = (d.categories || []).filter(r => r.count > 0);
+  const total = d.total_ghosted || 0;
+  const meta = document.getElementById('sec-silence-meta');
+  if (meta) {
+    if (total === 0) {
+      meta.textContent = `✅ LIVE · ${d.since} → ${d.until} · ยังไม่มี ghosted customers ในช่วงนี้ (เกณฑ์: เงียบ > 24 ชม.)`;
+    } else {
+      meta.textContent = `✅ LIVE · ${d.since} → ${d.until} · ${total} ghosted customers · จำแนกจาก keyword ในข้อความสุดท้าย`;
+    }
+  }
+  const container = document.getElementById('silence-rows');
+  if (container) {
+    if (rows.length === 0) {
+      container.innerHTML = '<div class="text-xs py-4" style="color:var(--soft)">ไม่มีข้อมูล ghosted customers ในช่วงนี้</div>';
+    } else {
+      const max = Math.max(1, ...rows.map(r => r.count));
+      container.innerHTML = rows.map(r => {
+        const w = (r.count / max * 100).toFixed(0);
+        const color = SILENCE_COLORS[r.label] || 'var(--gray)';
+        const tooltip = r.samples && r.samples.length ? ' title="' + r.samples.map(s => '• ' + s).join('\\n').replace(/"/g, '&quot;') + '"' : '';
+        return `<div class="bar-row"${tooltip}><div class="bar-label">${r.label}</div><div class="bar-track"><div class="bar-fill" style="width:${w}%; background:${color};"></div></div><div class="bar-num">${r.pct}% (${r.count})</div></div>`;
+      }).join('');
+    }
+  }
+  // Insights
+  const top1 = document.getElementById('silence-top1');
+  const top1d = document.getElementById('silence-top1-detail');
+  const top2 = document.getElementById('silence-top2');
+  const top2d = document.getElementById('silence-top2-detail');
+  if (rows[0] && top1) {
+    top1.innerHTML = `${rows[0].pct}% หายเพราะ <b>${rows[0].label.replace(/^[^\s]+\s/, '')}</b>`;
+    if (top1d) top1d.textContent = `${rows[0].count} จาก ${total} คน · ตัวอย่าง: ${(rows[0].samples?.[0] || '—').slice(0, 70)}`;
+  } else if (top1) {
+    top1.textContent = '—'; if (top1d) top1d.textContent = 'ไม่มีข้อมูล';
+  }
+  if (rows[1] && top2) {
+    top2.innerHTML = `${rows[1].pct}% หายเพราะ <b>${rows[1].label.replace(/^[^\s]+\s/, '')}</b>`;
+    if (top2d) top2d.textContent = `${rows[1].count} คน · ตัวอย่าง: ${(rows[1].samples?.[0] || '—').slice(0, 70)}`;
+  } else if (top2) {
+    top2.textContent = '—'; if (top2d) top2d.textContent = '';
+  }
+}
+
+// ── Render FAQ from real API ──
+async function refreshFAQ() {
+  const since = document.getElementById('ad-since')?.value;
+  const until = document.getElementById('ad-until')?.value;
+  const qs = new URLSearchParams();
+  if (since) qs.set('since', since);
+  if (until) qs.set('until', until);
+  try {
+    const r = await fetch('/api/everly/admin/faq?' + qs.toString());
+    const d = await r.json();
+    renderFAQ(d);
+  } catch (e) { console.error('faq fetch:', e); }
+}
+
+function renderFAQ(d) {
+  const rows = d.topics || [];
+  const totalQ = d.total_questions || 0;
+  const meta = document.getElementById('sec-faq-meta');
+  if (meta) {
+    meta.textContent = `✅ LIVE · ${d.since} → ${d.until} · ${d.total_messages || 0} ข้อความลูกค้า · ${totalQ} ที่เป็นคำถาม · จัดเป็น ${rows.length} หัวข้อ`;
+  }
+  const container = document.getElementById('faq-rows');
+  if (container) {
+    if (rows.length === 0) {
+      container.innerHTML = '<div class="text-xs py-4" style="color:var(--soft)">ยังไม่มีคำถามในช่วงนี้</div>';
+    } else {
+      container.innerHTML = rows.map((r, i) => {
+        const ex = (r.examples && r.examples[0]) ? `<div class="text-xs italic" style="color:var(--soft);margin-top:2px">"${r.examples[0]}"</div>` : '';
+        return `<div class="faq-row"><div class="faq-num">${i+1}</div><div class="flex-1"><b>${r.topic}</b><div class="text-xs" style="color:var(--soft)">ถาม ${r.count} ครั้ง · ${r.pct}%</div>${ex}</div></div>`;
+      }).join('');
+    }
+  }
+  // Quick replies — top 4 topics
+  const qrContainer = document.getElementById('faq-quickreplies');
+  if (qrContainer) {
+    if (rows.length === 0) {
+      qrContainer.innerHTML = '<div class="text-xs" style="color:var(--soft)">ยังไม่มีข้อมูลพอ</div>';
+    } else {
+      const top4 = rows.slice(0, 4);
+      qrContainer.innerHTML = top4.map((r, i) => {
+        const priority = i === 0 ? '🔥 priority 1' : `priority ${i+1}`;
+        return `<div class="p-4 rounded-xl" style="background: var(--cream); border: 1px solid var(--line-soft);"><div class="flex items-center gap-2 mb-2"><span class="pill pill-info">${priority}</span><span class="text-xs" style="color:var(--soft)">${r.pct}% ของคำถาม</span></div><div class="text-sm font-semibold">${r.topic}</div><div class="text-xs italic mt-1" style="color:var(--soft)">${r.examples?.[0] ? '"'+r.examples[0]+'"' : ''}</div></div>`;
+      }).join('');
+      const cov = top4.reduce((s, r) => s + r.pct, 0).toFixed(0);
+      const covEl = document.getElementById('faq-coverage');
+      const covText = document.getElementById('faq-coverage-text');
+      if (covEl && covText && cov > 0) {
+        covEl.classList.remove('hidden');
+        covText.innerHTML = `⚡ <b>4 Quick Reply นี้ตอบได้ ${cov}% ของคำถาม</b> · ลด workload ทีมแอดมินไปครึ่งหนึ่ง`;
+      }
+    }
+  }
+}
+
 // Auto-fetch funnel when admin tab is opened for the first time
 let _adminLoaded = false;
 document.querySelectorAll('.main-tab').forEach(btn => {
   btn.addEventListener('click', () => {
     if (btn.dataset.pane === 'admin' && !_adminLoaded) {
       _adminLoaded = true;
-      setTimeout(() => { refreshAdminTab(); checkTokenStatus(); }, 200);
+      setTimeout(() => { refreshAdminTab(); refreshSilenceTrigger(); refreshFAQ(); checkTokenStatus(); }, 200);
     }
   });
 });
+
+// Re-fetch all admin sections whenever the date filter changes
+(function wireAdminDateFilter() {
+  const sinceEl = document.getElementById('ad-since');
+  const untilEl = document.getElementById('ad-until');
+  const refreshAll = () => { refreshAdminTab(); refreshSilenceTrigger(); refreshFAQ(); };
+  if (sinceEl) sinceEl.addEventListener('change', refreshAll);
+  if (untilEl) untilEl.addEventListener('change', refreshAll);
+})();
 
 // Token status check + auto-show/hide banner
 async function checkTokenStatus() {

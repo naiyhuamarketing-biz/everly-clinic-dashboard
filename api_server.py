@@ -1202,6 +1202,307 @@ def admin_funnel(
     }
 
 
+# ── Silence Trigger + FAQ classification (keyword-based) ──────────
+# Thai keyword patterns for classifying WHY customers go silent and WHAT they ask.
+# Each category maps to a list of keyword patterns. First match wins (priority).
+# Categories ordered roughly by typical frequency for clinic context.
+
+_SILENCE_CATEGORIES = [
+    ("💰 ราคา",        ["ราคา", "เท่าไหร่", "กี่บาท", "แพง", "ค่าใช้จ่าย", "ทุน", "บาท", "เริ่มต้น", "ค่าทำ", "งบ"]),
+    ("📍 โลเคชัน",     ["ที่ไหน", "อยู่ไหน", "สาขา", "ที่ตั้ง", "map", "ใกล้", "ไกล", "เส้นทาง", "ที่อยู่", "บางพลี", "สมุทรปราการ"]),
+    ("⏰ เวลานัด",     ["นัด", "จอง", "ว่างไหม", "เวลา", "วันไหน", "อาทิตย์", "พรุ่งนี้", "เปิดกี่โมง", "คิว"]),
+    ("💸 ขอลด",       ["ลด", "ส่วนลด", "ดีลส์", "voucher", "deal", "discount", "ต่อราคา", "ขอราคาพิเศษ"]),
+    ("📆 รอโปรโม",    ["โปร", "promotion", "รอโปร", "เดือนหน้า", "ครั้งหน้า", "โปรใหม่", "โปรโมชั่น"]),
+    ("🩺 บริการ",      ["บริการ", "รักษา", "ทำไหม", "มี", "ฉีด", "นวด", "หัตถการ", "เสริม", "filler", "botox"]),
+    ("👨‍⚕️ หมอ",        ["หมอ", "แพทย์", "ดร.", "ดอกเตอร์", "ผู้เชี่ยวชาญ", "ใครรักษา", "ใครทำ", "ประสบการณ์"]),
+    ("🛡 ปลอดภัย",     ["ปลอดภัย", "อันตราย", "ผลข้างเคียง", "เจ็บไหม", "เจ็บ", "FDA", "มาตรฐาน", "รับรอง", "ช้ำ", "บวม"]),
+    ("⏳ ขอคิดดูก่อน", ["คิดดู", "ปรึกษา", "ลังเล", "ขอเวลา", "เดี๋ยว", "ขอดูก่อน", "ยังไม่พร้อม", "ขอตัดสินใจ"]),
+]
+_SILENCE_OTHER_LABEL = "🤔 อื่นๆ"
+
+
+def _classify_silence(text: str) -> str:
+    """Return category label for a customer message based on keyword match.
+    Falls back to 'อื่นๆ' if nothing matches. Order in _SILENCE_CATEGORIES
+    encodes priority (price wins over service if both keywords present)."""
+    if not text:
+        return _SILENCE_OTHER_LABEL
+    s = str(text).lower()
+    s = s.translate(str.maketrans("๐๑๒๓๔๕๖๗๘๙", "0123456789"))
+    for label, keywords in _SILENCE_CATEGORIES:
+        for kw in keywords:
+            if kw.lower() in s:
+                return label
+    return _SILENCE_OTHER_LABEL
+
+
+# FAQ topic classification: which question is being asked
+# Tuple (label, keywords) — order = priority (specific before generic)
+_FAQ_TOPICS = [
+    ("ราคาเท่าไหร่",         ["ราคา", "เท่าไหร่", "กี่บาท", "ค่าใช้จ่าย", "ค่าทำ"]),
+    ("ที่ตั้งคลินิก / map",    ["ที่ไหน", "ที่ตั้ง", "สาขา", "อยู่ไหน", "map", "เส้นทาง", "ที่อยู่"]),
+    ("มีโปรโมชั่น",          ["โปร", "promotion", "ลดไหม", "discount", "deal"]),
+    ("จองคิว / นัดหมาย",      ["จอง", "นัด", "ว่างไหม", "คิว", "booking"]),
+    ("ใช้เวลาทำกี่นาที",      ["กี่นาที", "นานไหม", "ใช้เวลา", "นาน"]),
+    ("หมอชื่ออะไร",          ["หมอ", "แพทย์", "ดร.", "ใครทำ", "ใครรักษา"]),
+    ("ผ่อนได้มั้ย",          ["ผ่อน", "0%", "installment", "ผ่อนชำระ"]),
+    ("เจ็บมั้ย / ผลข้างเคียง", ["เจ็บ", "ผลข้างเคียง", "อันตราย", "ปลอดภัย", "ช้ำ", "บวม"]),
+    ("อยู่ได้นานกี่เดือน",     ["นานกี่เดือน", "อยู่นาน", "ระยะเวลา", "นานแค่ไหน"]),
+    ("เปิดวันไหนบ้าง",        ["เปิดวันไหน", "วันเปิด", "วันปิด", "หยุด"]),
+    ("รีวิว / ผลก่อนหลัง",     ["รีวิว", "review", "ก่อนหลัง", "before after"]),
+    ("ขั้นตอนทำ",            ["ขั้นตอน", "วิธีทำ", "ทำยังไง", "process"]),
+]
+_FAQ_OTHER_LABEL = "อื่นๆ"
+
+
+def _is_question(text: str) -> bool:
+    """Heuristic: does this customer message ask a question?"""
+    if not text or len(text) < 3:
+        return False
+    s = str(text)
+    # Direct question marks (Thai or Latin)
+    if "?" in s or "？" in s:
+        return True
+    # Thai question particles
+    for kw in ["ไหม", "มั้ย", "เหรอ", "หรอ", "หรือเปล่า", "กี่", "ที่ไหน", "เมื่อไหร่", "เท่าไหร่",
+               "อะไร", "ทำไม", "ยังไง", "มีไหม", "ใคร", "บ้างไหม"]:
+        if kw in s:
+            return True
+    return False
+
+
+def _classify_faq(text: str) -> Optional[str]:
+    """Return FAQ topic label for a customer question, or None if not a question."""
+    if not _is_question(text):
+        return None
+    s = str(text).lower()
+    for label, keywords in _FAQ_TOPICS:
+        for kw in keywords:
+            if kw.lower() in s:
+                return label
+    return _FAQ_OTHER_LABEL
+
+
+def _build_admin_message_corpus(s_ts: int, u_ts: int) -> dict:
+    """Helper: pull all conversations updated in range, then for each fetch ALL messages,
+    keeping only customer-side messages (from.id != page_id). Returns:
+      conversations: list of {id, message_count, first_message_ts, last_msg_ts,
+                              last_msg_from_customer, customer_messages: [{ts, text}]}
+      activity_total, fetched_total, errors
+    """
+    import requests as _r
+    token, page_id = _page_credentials()
+    if not (token and page_id):
+        return {"conversations": [], "activity_total": 0, "fetched_total": 0, "errors": "no creds"}
+
+    convs = _fetch_all_conversations(s_ts, u_ts)
+    activity_total = len(convs)
+
+    out = []
+    errors = 0
+
+    def _fetch_full(c):
+        try:
+            next_url = f"https://graph.facebook.com/v20.0/{c['id']}/messages"
+            params = {"limit": 100, "fields": "created_time,message,from", "access_token": token}
+            customer_msgs = []
+            oldest_ts = None
+            last_ts = None
+            last_from = None
+            for _ in range(20):
+                r = _r.get(next_url, params=params, timeout=15)
+                if r.status_code != 200:
+                    return None
+                data = r.json()
+                msgs = data.get("data", [])
+                if not msgs:
+                    break
+                for m in msgs:
+                    ts_str = m.get("created_time", "")
+                    try:
+                        ts_dt = datetime.strptime(ts_str.split("+")[0], "%Y-%m-%dT%H:%M:%S")
+                        ts = int(ts_dt.replace(tzinfo=timezone.utc).timestamp())
+                    except Exception:
+                        continue
+                    fid = (m.get("from") or {}).get("id", "")
+                    text = m.get("message", "") or ""
+                    if oldest_ts is None or ts < oldest_ts:
+                        oldest_ts = ts
+                    if last_ts is None or ts > last_ts:
+                        last_ts = ts
+                        last_from = fid
+                    if fid and str(fid) != str(page_id) and text:
+                        customer_msgs.append({"ts": ts, "text": text})
+                # Short-circuit if conversation predates range
+                if s_ts and oldest_ts and oldest_ts < s_ts:
+                    return None  # signal: skip (continuation, not new)
+                next_url = (data.get("paging") or {}).get("next")
+                if not next_url:
+                    break
+                params = {}
+            customer_msgs.sort(key=lambda x: x["ts"])
+            return {
+                "id": c["id"],
+                "message_count": c.get("message_count", 0),
+                "first_message_ts": oldest_ts,
+                "last_msg_ts": last_ts,
+                "last_msg_from_customer": last_from and str(last_from) != str(page_id),
+                "customer_messages": customer_msgs,
+            }
+        except Exception:
+            return "error"
+
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=10) as pool:
+        for result in pool.map(_fetch_full, convs):
+            if result == "error":
+                errors += 1
+            elif result is not None:
+                # Only count if first_message in range (genuinely NEW conversation)
+                if result.get("first_message_ts") and s_ts <= result["first_message_ts"] <= u_ts:
+                    out.append(result)
+    return {"conversations": out, "activity_total": activity_total, "fetched_total": len(out), "errors": errors}
+
+
+@app.get("/api/everly/admin/silence-trigger")
+def admin_silence_trigger(
+    since: Optional[str] = Query(None),
+    until: Optional[str] = Query(None),
+):
+    """Real Silence Trigger analysis — categorizes ghosted customers by likely reason.
+    Method: for each NEW conversation in range that's 'ghosted' (3-15 messages, last
+    from customer, customer didn't reply within 24h after admin's last reply), inspect
+    the LAST 3 customer messages and classify with keyword matcher.
+    """
+    today = today_bkk()
+    s = date.fromisoformat(since) if since else (today - timedelta(days=7))
+    u = date.fromisoformat(until) if until else today
+    s_dt = datetime.combine(s, datetime.min.time(), tzinfo=BANGKOK_TZ)
+    u_dt = datetime.combine(u, datetime.max.time(), tzinfo=BANGKOK_TZ)
+    s_ts = int(s_dt.timestamp())
+    u_ts = int(u_dt.timestamp())
+
+    corpus = _build_admin_message_corpus(s_ts, u_ts)
+    convs = corpus["conversations"]
+
+    # Identify ghosted conversations: 3-15 total messages, last is from customer
+    # OR last admin reply was >24h ago and customer hasn't responded since
+    now_ts = int(datetime.now(timezone.utc).timestamp())
+    ghosted = []
+    for c in convs:
+        mc = c.get("message_count", 0)
+        if not (3 <= mc <= 15):
+            continue
+        cms = c.get("customer_messages", [])
+        if not cms:
+            continue
+        last_ts = c.get("last_msg_ts") or 0
+        # Silent for 24+ hours
+        if (now_ts - last_ts) >= 86400:
+            ghosted.append(c)
+
+    # Classify each ghosted conv by the LAST 3 customer messages combined
+    counts = {}
+    samples = {}  # category -> list of recent message snippets (for tooltip)
+    for c in ghosted:
+        last_3 = c["customer_messages"][-3:]
+        text = " ".join(m["text"] for m in last_3)
+        cat = _classify_silence(text)
+        counts[cat] = counts.get(cat, 0) + 1
+        samples.setdefault(cat, []).append(last_3[-1]["text"][:80] if last_3 else "")
+
+    total = sum(counts.values())
+    # Build all categories (include 0-counts for stable rendering order)
+    all_cats = [lbl for lbl, _ in _SILENCE_CATEGORIES] + [_SILENCE_OTHER_LABEL]
+    rows = []
+    for cat in all_cats:
+        c = counts.get(cat, 0)
+        rows.append({
+            "label": cat,
+            "count": c,
+            "pct": round(c / total * 100, 1) if total else 0,
+            "samples": samples.get(cat, [])[:3],
+        })
+    rows.sort(key=lambda r: -r["count"])
+
+    return {
+        "since": s.isoformat(),
+        "until": u.isoformat(),
+        "total_ghosted": total,
+        "categories": rows,
+        "debug": {
+            "activity_total": corpus["activity_total"],
+            "fetched_total": corpus["fetched_total"],
+            "errors": corpus["errors"],
+            "ghosted_total": len(ghosted),
+        },
+        "fetched_at": now_bkk().isoformat(),
+    }
+
+
+@app.get("/api/everly/admin/faq")
+def admin_faq(
+    since: Optional[str] = Query(None),
+    until: Optional[str] = Query(None),
+):
+    """Real FAQ analysis — extracts customer questions in range and groups by topic.
+    Method: collect every customer message that looks like a question, classify each
+    by topic (keyword match), return top 10 + counts.
+    """
+    today = today_bkk()
+    s = date.fromisoformat(since) if since else (today - timedelta(days=7))
+    u = date.fromisoformat(until) if until else today
+    s_dt = datetime.combine(s, datetime.min.time(), tzinfo=BANGKOK_TZ)
+    u_dt = datetime.combine(u, datetime.max.time(), tzinfo=BANGKOK_TZ)
+    s_ts = int(s_dt.timestamp())
+    u_ts = int(u_dt.timestamp())
+
+    corpus = _build_admin_message_corpus(s_ts, u_ts)
+
+    counts = {}
+    examples = {}  # topic -> list of representative questions
+    total_questions = 0
+    total_messages = 0
+    for c in corpus["conversations"]:
+        for m in c.get("customer_messages", []):
+            total_messages += 1
+            topic = _classify_faq(m["text"])
+            if topic is None:
+                continue
+            total_questions += 1
+            counts[topic] = counts.get(topic, 0) + 1
+            if topic not in examples:
+                examples[topic] = []
+            if len(examples[topic]) < 3 and m["text"][:80] not in examples[topic]:
+                examples[topic].append(m["text"][:80])
+
+    rows = [
+        {
+            "topic": topic,
+            "count": c,
+            "pct": round(c / total_questions * 100, 1) if total_questions else 0,
+            "examples": examples.get(topic, []),
+        }
+        for topic, c in counts.items()
+    ]
+    rows.sort(key=lambda r: -r["count"])
+    rows = rows[:12]  # top 12
+
+    return {
+        "since": s.isoformat(),
+        "until": u.isoformat(),
+        "total_messages": total_messages,
+        "total_questions": total_questions,
+        "topics": rows,
+        "debug": {
+            "activity_total": corpus["activity_total"],
+            "fetched_total": corpus["fetched_total"],
+            "errors": corpus["errors"],
+        },
+        "fetched_at": now_bkk().isoformat(),
+    }
+
+
 @app.get("/api/everly/keepalive")
 def keepalive():
     """Lightweight ping that:

@@ -341,6 +341,17 @@
   .bar-fill { position: absolute; inset: 0; border-radius: 4px; }
   .bar-num { width: 90px; text-align: right; font-family: 'Cormorant Garamond'; font-variant-numeric: tabular-nums lining-nums; font-weight: 600; }
 
+  /* Response time distribution rows (Phase 1 admin) */
+  .rt-row { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+  .rt-label { width: 120px; color: var(--ink-muted, var(--soft)); font-size: 12px; }
+  .rt-bar { flex: 1; height: 18px; background: var(--cream); border-radius: 4px; overflow: hidden; }
+  .rt-fill { height: 100%; width: 0%; border-radius: 4px; transition: width .4s ease; }
+  .rt-count { width: 60px; text-align: right; font-weight: 600; }
+
+  /* Hourly heatmap cell */
+  .hr-cell { aspect-ratio: 1/1; border-radius: 3px; background: var(--cream); position: relative; cursor: default; }
+  .hr-cell::after { content: attr(data-hr); position: absolute; bottom: -14px; left: 50%; transform: translateX(-50%); font-size: 8px; color: var(--soft); }
+
   .faq-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px dashed var(--line-soft); }
   .faq-row:last-child { border-bottom: none; }
   .faq-num { font-family: 'Italiana'; font-size: 18px; color: var(--gold); width: 30px; }
@@ -515,42 +526,7 @@
   </details>
 </section>
 
-<!-- ============================================================
-     SECTION 02 · DAILY OPERATIONS (date picker → smart board)
-     ============================================================ -->
-<section class="max-w-[1400px] mx-auto px-8 pt-6">
-  <details class="section" id="sec-daily" ontoggle="onSectionToggle('daily', this)">
-    <summary>
-      <div>
-        <div class="sec-eyebrow flex items-center gap-2">
-          <span>Section 02</span>
-          <span id="dy-live-on" class="pill" style="background:#ECFDF5; color:#16A34A; padding:2px 9px; font-size:9px; letter-spacing:.15em; display:none">
-            <span style="width:6px; height:6px; border-radius:50%; background:#16A34A; display:inline-block; box-shadow:0 0 0 3px rgba(22,163,74,.18); animation:pulse 1.4s infinite"></span> LIVE FROM META
-          </span>
-          <span id="dy-live-off" class="pill pill-mute" style="font-size:9px; letter-spacing:.15em">offline</span>
-        </div>
-        <div class="sec-title">Daily Operations · รายละเอียดรายวัน</div>
-        <div class="sec-meta">เลือกวันที่ → โชว์ Smart Board ของวันนั้น (Spend / Inbox / Top Campaign)</div>
-      </div>
-      <div class="chev">▾</div>
-    </summary>
-    <div class="section-body">
-      <div class="hairline mb-6"></div>
-      <div class="flex flex-wrap items-center justify-between gap-3 mb-5">
-        <div class="flex items-center gap-3 flex-wrap">
-          <span class="stamp">PERIOD</span>
-          <div class="range-pills" id="dy-presets"></div>
-        </div>
-        <div class="flex gap-2 items-center">
-          <input type="date" id="dy-since" class="date-input" style="border:1px solid var(--line); padding:6px 10px; border-radius:10px; font-size:12px;" />
-          <input type="date" id="dy-until" class="date-input" style="border:1px solid var(--line); padding:6px 10px; border-radius:10px; font-size:12px;" />
-          <button class="btn btn-ghost btn-sm" onclick="fetchDailyRange()">↻ Refresh</button>
-        </div>
-      </div>
-      <div id="dy-content"></div>
-    </div>
-  </details>
-</section>
+<!-- SECTION 02 (Daily Operations) — REMOVED per user request -->
 
 <!-- ============================================================
      SECTION 03 · TOP HIGHLIGHTS (range filter → top ads)
@@ -816,11 +792,77 @@
             <div class="dropoff-card" style="background: var(--ivory);">
               <div class="text-xs font-semibold uppercase tracking-wider mb-2" style="color:var(--soft)">⏱ Avg First Response</div>
               <div class="flex items-baseline gap-2">
-                <div class="num text-3xl font-bold" style="color:var(--rg-deep)">4.2</div>
+                <div class="num text-3xl font-bold" id="rt-avg" style="color:var(--rg-deep)">—</div>
                 <div class="text-base" style="color:var(--soft)">นาที</div>
-                <span class="pill pill-rg ml-auto" style="background:#E8EFE8; color:#7A9E7E">target &lt; 5</span>
+                <span class="pill pill-rg ml-auto" id="rt-target-pill" style="background:#E8EFE8; color:#7A9E7E">target &lt; 5</span>
+              </div>
+              <div class="text-[11px] mt-2" style="color:var(--soft)" id="rt-samples">รอข้อมูล</div>
+            </div>
+
+            <div class="dropoff-card" style="background:#FEF3F0; border-color:#F5D7CC;">
+              <div class="flex items-start gap-3">
+                <span class="text-2xl">🟠</span>
+                <div class="flex-1">
+                  <div class="text-xs font-semibold uppercase tracking-wider" style="color:#C76A30">ตอบช้า &gt; 30 นาที</div>
+                  <div class="num text-3xl font-bold mt-1" id="rt-slow" style="color:#C76A30">— <span class="text-base" style="color:var(--soft)">เคส</span></div>
+                  <div class="text-xs mt-1" style="color:var(--soft)">ในช่วงเวลาที่เลือก · ทำให้ลูกค้าหายไปเยอะ</div>
+                </div>
               </div>
             </div>
+
+            <div class="dropoff-card" style="background:#FFF8E6; border-color:#F1E2A8;">
+              <div class="flex items-start gap-3">
+                <span class="text-2xl">🔴</span>
+                <div class="flex-1">
+                  <div class="text-xs font-semibold uppercase tracking-wider" style="color:#A47218">ลูกค้ารอตอบอยู่</div>
+                  <div class="num text-3xl font-bold mt-1" id="rt-waiting" style="color:#A47218">— <span class="text-base" style="color:var(--soft)">คน</span></div>
+                  <div class="text-xs mt-1" style="color:var(--soft)">ส่งข้อความล่าสุด · เงียบ &gt; 5 นาที</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Response Time Distribution -->
+        <div class="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-5">
+          <div class="card p-6">
+            <div class="text-xs font-semibold uppercase tracking-wider mb-3" style="color:var(--rg-deep)">⏱ Response Time Distribution</div>
+            <div class="space-y-3" id="rt-distribution">
+              <div class="rt-row" data-bucket="under_5min"><span class="rt-label">&lt; 5 นาที</span><div class="rt-bar"><div class="rt-fill" style="background:#7A9E7E"></div></div><span class="rt-count">—</span></div>
+              <div class="rt-row" data-bucket="min_5_30"><span class="rt-label">5–30 นาที</span><div class="rt-bar"><div class="rt-fill" style="background:#C9A968"></div></div><span class="rt-count">—</span></div>
+              <div class="rt-row" data-bucket="min_30_60"><span class="rt-label">30 นาที – 1 ชม.</span><div class="rt-bar"><div class="rt-fill" style="background:#D08A4F"></div></div><span class="rt-count">—</span></div>
+              <div class="rt-row" data-bucket="over_1h"><span class="rt-label">&gt; 1 ชั่วโมง</span><div class="rt-bar"><div class="rt-fill" style="background:#C53030"></div></div><span class="rt-count">—</span></div>
+            </div>
+            <div class="text-[11px] mt-3" style="color:var(--soft)">เวลาที่แอดมินตอบลูกค้าครั้งแรก หลังจากลูกค้าทักเข้ามา</div>
+          </div>
+
+          <!-- Hourly Heatmap -->
+          <div class="card p-6">
+            <div class="text-xs font-semibold uppercase tracking-wider mb-3" style="color:var(--rg-deep)">📊 ลูกค้าทักช่วงเวลาไหน</div>
+            <div class="grid grid-cols-12 gap-1" id="hr-heatmap"></div>
+            <div class="flex justify-between text-[10px] mt-2" style="color:var(--soft)">
+              <span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>23:00</span>
+            </div>
+            <div class="text-[11px] mt-2" style="color:var(--soft)">เข้มขึ้น = คนทักมากขึ้น · ใช้วางแผนกะ admin</div>
+          </div>
+        </div>
+
+        <!-- Lead Quality Stats Row -->
+        <div class="mt-6 grid grid-cols-1 md:grid-cols-3 gap-5">
+          <div class="card p-5 text-center">
+            <div class="text-xs font-semibold uppercase tracking-wider" style="color:var(--soft)">🎯 Conversion (ทัก → ได้เบอร์)</div>
+            <div class="num text-4xl font-bold mt-2" id="lq-conversion" style="color:var(--rg-deep)">—%</div>
+            <div class="text-[11px] mt-1" style="color:var(--soft)" id="lq-conversion-detail">รอข้อมูล</div>
+          </div>
+          <div class="card p-5 text-center">
+            <div class="text-xs font-semibold uppercase tracking-wider" style="color:var(--soft)">💬 Avg ข้อความก่อนได้เบอร์</div>
+            <div class="num text-4xl font-bold mt-2" id="lq-avg-msgs" style="color:var(--rg-deep)">—</div>
+            <div class="text-[11px] mt-1" style="color:var(--soft)">ของ conversation ที่ได้เบอร์</div>
+          </div>
+          <div class="card p-5 text-center">
+            <div class="text-xs font-semibold uppercase tracking-wider" style="color:var(--soft)">📞 ได้เบอร์ทั้งหมด</div>
+            <div class="num text-4xl font-bold mt-2" id="lq-phones" style="color:var(--gold)">—</div>
+            <div class="text-[11px] mt-1" style="color:var(--soft)">ในช่วงเวลาที่เลือก</div>
           </div>
         </div>
       </div>
@@ -1861,6 +1903,65 @@ function renderAdminFunnel(d) {
     const tag = d.configured ? '✅ LIVE' : '⚡ MOCK';
     meta.innerHTML = `${tag} · ${d.since} → ${d.until} · ${total} conversations · % คิดจาก ${total}`;
   }
+
+  // ── Response time stats ──
+  const rt = d.response_time || {};
+  const rtAvg = document.getElementById('rt-avg');
+  const rtSamples = document.getElementById('rt-samples');
+  const rtTargetPill = document.getElementById('rt-target-pill');
+  if (rtAvg) {
+    if (rt.avg_min == null) {
+      rtAvg.textContent = '—';
+      if (rtSamples) rtSamples.textContent = `ไม่พบข้อมูล (ต้องมีลูกค้าคุยกับแอดมินในช่วงนั้น)`;
+    } else {
+      rtAvg.textContent = rt.avg_min;
+      if (rtSamples) rtSamples.textContent = `จาก ${rt.samples} เคส`;
+      if (rtTargetPill) {
+        const onTarget = rt.avg_min < 5;
+        rtTargetPill.style.background = onTarget ? '#E8EFE8' : '#FEEAEA';
+        rtTargetPill.style.color      = onTarget ? '#7A9E7E' : '#C53030';
+        rtTargetPill.textContent       = onTarget ? '✓ on target' : '⚠ ช้ากว่า target';
+      }
+    }
+  }
+  const rtSlow = document.getElementById('rt-slow');
+  if (rtSlow) rtSlow.innerHTML = `${rt.slow_count ?? 0} <span class="text-base" style="color:var(--soft)">เคส</span>`;
+  const rtWaiting = document.getElementById('rt-waiting');
+  if (rtWaiting) rtWaiting.innerHTML = `${rt.currently_waiting ?? 0} <span class="text-base" style="color:var(--soft)">คน</span>`;
+
+  const rtDist = (d.response_time && d.response_time.distribution) || {};
+  const distMax = Math.max(1, rtDist.under_5min ?? 0, rtDist.min_5_30 ?? 0, rtDist.min_30_60 ?? 0, rtDist.over_1h ?? 0);
+  document.querySelectorAll('#rt-distribution .rt-row').forEach(row => {
+    const bucket = row.dataset.bucket;
+    const cnt = rtDist[bucket] ?? 0;
+    const fill = row.querySelector('.rt-fill');
+    const cntEl = row.querySelector('.rt-count');
+    if (fill) fill.style.width = (cnt / distMax * 100) + '%';
+    if (cntEl) cntEl.textContent = cnt;
+  });
+
+  // ── Hourly heatmap ──
+  const heatmap = d.hourly_heatmap || [];
+  const hmContainer = document.getElementById('hr-heatmap');
+  if (hmContainer && heatmap.length === 24) {
+    const maxCount = Math.max(1, ...heatmap);
+    hmContainer.innerHTML = heatmap.map((cnt, hr) => {
+      const intensity = cnt / maxCount;
+      const opacity = cnt === 0 ? 0.15 : 0.3 + intensity * 0.7;
+      return `<div class="hr-cell" style="background: rgba(150, 110, 80, ${opacity})" title="${hr}:00 — ${cnt} คน" data-hr="${hr % 6 === 0 ? hr : ''}"></div>`;
+    }).join('');
+  }
+
+  // ── Lead quality ──
+  const lq = d.lead_quality || {};
+  const lqConv = document.getElementById('lq-conversion');
+  const lqConvDetail = document.getElementById('lq-conversion-detail');
+  if (lqConv) lqConv.textContent = (lq.conversion_rate ?? 0) + '%';
+  if (lqConvDetail) lqConvDetail.textContent = `${lq.phones_count ?? 0} ได้เบอร์ จาก ${total} ทัก`;
+  const lqAvgMsgs = document.getElementById('lq-avg-msgs');
+  if (lqAvgMsgs) lqAvgMsgs.textContent = lq.avg_messages_to_phone == null ? '—' : lq.avg_messages_to_phone;
+  const lqPhones = document.getElementById('lq-phones');
+  if (lqPhones) lqPhones.textContent = lq.phones_count ?? 0;
 }
 
 // Auto-fetch funnel when admin tab is opened for the first time

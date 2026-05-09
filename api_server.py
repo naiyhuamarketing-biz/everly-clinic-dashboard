@@ -650,51 +650,89 @@ def _text_has_phone(text: str) -> bool:
     return False
 
 
-def _analyze_conversation_messages(conv_id: str, token: str, since_ts: Optional[int] = None) -> dict:
-    """Paginate through a conversation's messages, tracking BOTH:
-      - oldest_ts: chronologically first message timestamp (true conversation start)
-      - has_phone: whether any customer message contains a Thai mobile number
-    Returns {oldest_ts, has_phone, error}. Short-circuits pagination when an oldest
-    message older than since_ts is found (conv is OLD; no need to keep paginating).
+def _analyze_conversation_messages(conv_id: str, token: str, since_ts: Optional[int] = None,
+                                   page_id: Optional[str] = None) -> dict:
+    """Paginate through a conversation's messages, tracking:
+      - oldest_ts: chronologically first message (true conversation start)
+      - has_phone: any customer message contains a Thai mobile number
+      - first_customer_msg_ts: first message FROM customer (for response time calc)
+      - first_admin_reply_ts: first message FROM page that comes AFTER first_customer_msg_ts
+      - last_msg_from_customer: bool — is the most recent message from customer?
+      - last_msg_ts: timestamp of most recent message
+    Short-circuits when an oldest message older than since_ts is found.
     """
     import requests as _r
     next_url = f"https://graph.facebook.com/v20.0/{conv_id}/messages"
-    params = {"limit": 100, "fields": "created_time,message", "access_token": token}
-    oldest_seen: Optional[int] = None
+    params = {"limit": 100, "fields": "created_time,message,from", "access_token": token}
+    all_msgs = []  # list of (ts, from_id, text) for sorting later
     has_phone = False
+    found_old = False
 
     try:
-        for _ in range(20):  # safety cap: 2000 msgs per conversation
+        for _ in range(20):
             r = _r.get(next_url, params=params, timeout=15)
             if r.status_code != 200:
-                return {"oldest_ts": oldest_seen, "has_phone": has_phone, "error": True}
+                break
             data = r.json()
             msgs = data.get("data", [])
             if not msgs:
                 break
             for msg in msgs:
-                if not has_phone:
-                    text = msg.get("message", "")
-                    if text and _text_has_phone(text):
-                        has_phone = True
                 ts_str = msg.get("created_time", "")
                 try:
                     ts_dt = datetime.strptime(ts_str.split("+")[0], "%Y-%m-%dT%H:%M:%S")
                     ts = int(ts_dt.replace(tzinfo=timezone.utc).timestamp())
                 except Exception:
                     continue
-                if oldest_seen is None or ts < oldest_seen:
-                    oldest_seen = ts
-            # Short-circuit: oldest seen so far is already before since_ts → conv is OLD
-            if since_ts is not None and oldest_seen is not None and oldest_seen < since_ts:
-                return {"oldest_ts": oldest_seen, "has_phone": has_phone, "error": False}
+                from_id = (msg.get("from") or {}).get("id", "")
+                text = msg.get("message", "")
+                if text and not has_phone and _text_has_phone(text):
+                    has_phone = True
+                all_msgs.append((ts, from_id, bool(text)))
+            # Short-circuit if oldest seen so far is already before since_ts
+            if since_ts is not None and all_msgs:
+                cur_oldest = min(m[0] for m in all_msgs)
+                if cur_oldest < since_ts:
+                    found_old = True
+                    break
             next_url = (data.get("paging") or {}).get("next")
             if not next_url:
                 break
             params = {}
-        return {"oldest_ts": oldest_seen, "has_phone": has_phone, "error": False}
+
+        if not all_msgs:
+            return {"oldest_ts": None, "has_phone": False, "error": True}
+
+        # Sort chronologically (oldest first)
+        all_msgs.sort(key=lambda x: x[0])
+        oldest_ts = all_msgs[0][0]
+        last_ts, last_from, _ = all_msgs[-1]
+
+        # Identify first customer message + first admin reply after it
+        first_cust_ts = None
+        first_admin_reply_ts = None
+        for ts, fid, _ in all_msgs:
+            is_admin = page_id and fid == str(page_id)
+            if first_cust_ts is None and not is_admin:
+                first_cust_ts = ts
+                continue
+            if first_cust_ts is not None and first_admin_reply_ts is None and is_admin and ts >= first_cust_ts:
+                first_admin_reply_ts = ts
+                break
+
+        last_from_customer = bool(last_from) and (not page_id or last_from != str(page_id))
+
+        return {
+            "oldest_ts": oldest_ts,
+            "has_phone": has_phone,
+            "first_customer_msg_ts": first_cust_ts,
+            "first_admin_reply_ts": first_admin_reply_ts,
+            "last_msg_from_customer": last_from_customer,
+            "last_msg_ts": last_ts,
+            "error": False,
+        }
     except Exception:
-        return {"oldest_ts": oldest_seen, "has_phone": has_phone, "error": True}
+        return {"oldest_ts": None, "has_phone": has_phone, "error": True}
 
 
 # Backwards-compat shim: callers expecting just ts.
@@ -839,8 +877,10 @@ def admin_funnel(
     fetch_errors = 0
     from concurrent.futures import ThreadPoolExecutor
 
+    _, page_id = _page_credentials()
+
     def _check(c):
-        result = _analyze_conversation_messages(c["id"], token, since_ts=s_ts)
+        result = _analyze_conversation_messages(c["id"], token, since_ts=s_ts, page_id=page_id)
         return c, result
 
     # Parallelize per-conversation message analysis (10 workers ≈ 3-4× faster)
@@ -853,6 +893,10 @@ def admin_funnel(
             if s_ts <= ts <= u_ts:
                 c["first_message_ts"] = ts
                 c["has_phone"] = bool(result.get("has_phone"))
+                c["first_customer_msg_ts"] = result.get("first_customer_msg_ts")
+                c["first_admin_reply_ts"] = result.get("first_admin_reply_ts")
+                c["last_msg_from_customer"] = bool(result.get("last_msg_from_customer"))
+                c["last_msg_ts"] = result.get("last_msg_ts")
                 new_conversations.append(c)
             else:
                 skipped_old += 1
@@ -893,6 +937,53 @@ def admin_funnel(
     # Ghosted: 2-3 messages (page replied but customer didn't continue)
     ghosted = sum(1 for c in new_conversations if 2 <= (c.get("message_count") or 0) <= 3)
 
+    # ── Response time stats (NEW Phase 1) ──
+    # Compute customer-to-admin first response time, in seconds, per NEW conversation
+    response_secs = []
+    for c in new_conversations:
+        cm = c.get("first_customer_msg_ts")
+        ar = c.get("first_admin_reply_ts")
+        if cm and ar and ar >= cm:
+            response_secs.append(ar - cm)
+    if response_secs:
+        avg_response_min = round(sum(response_secs) / len(response_secs) / 60, 1)
+        rt_under_5 = sum(1 for s in response_secs if s < 300)
+        rt_5_30   = sum(1 for s in response_secs if 300 <= s < 1800)
+        rt_30_60  = sum(1 for s in response_secs if 1800 <= s < 3600)
+        rt_over_1h = sum(1 for s in response_secs if s >= 3600)
+        slow_count = rt_30_60 + rt_over_1h
+    else:
+        avg_response_min = None
+        rt_under_5 = rt_5_30 = rt_30_60 = rt_over_1h = 0
+        slow_count = 0
+
+    # Currently waiting: last message from customer AND >5min ago (still queued for admin)
+    now_ts = int(datetime.now(timezone.utc).timestamp())
+    waiting_count = sum(
+        1 for c in new_conversations
+        if c.get("last_msg_from_customer") and c.get("last_msg_ts")
+        and (now_ts - int(c["last_msg_ts"])) >= 300
+    )
+
+    # Hourly heatmap (BKK timezone): bucket first_customer_msg_ts by hour 0-23
+    hourly_buckets = [0] * 24
+    for c in new_conversations:
+        cm = c.get("first_customer_msg_ts")
+        if cm:
+            try:
+                hr = datetime.fromtimestamp(int(cm), tz=BANGKOK_TZ).hour
+                if 0 <= hr <= 23:
+                    hourly_buckets[hr] += 1
+            except Exception:
+                pass
+
+    # Lead quality stats
+    avg_msgs_to_phone = None
+    if phones_count > 0:
+        msgs_with_phone = [(c.get("message_count") or 0) for c in new_conversations if c.get("has_phone")]
+        if msgs_with_phone:
+            avg_msgs_to_phone = round(sum(msgs_with_phone) / len(msgs_with_phone), 1)
+
     return {
         "since": s.isoformat(),
         "until": u.isoformat(),
@@ -901,6 +992,24 @@ def admin_funnel(
         "stages": stages,
         "no_reply": no_reply,
         "ghosted": ghosted,
+        "response_time": {
+            "samples": len(response_secs),
+            "avg_min": avg_response_min,
+            "distribution": {
+                "under_5min":  rt_under_5,
+                "min_5_30":    rt_5_30,
+                "min_30_60":   rt_30_60,
+                "over_1h":     rt_over_1h,
+            },
+            "slow_count": slow_count,
+            "currently_waiting": waiting_count,
+        },
+        "hourly_heatmap": hourly_buckets,
+        "lead_quality": {
+            "conversion_rate": round(phones_count / total * 100, 1) if total else 0,
+            "phones_count": phones_count,
+            "avg_messages_to_phone": avg_msgs_to_phone,
+        },
         "fetched_at": now_bkk().isoformat(),
         "debug": debug_info,
     }

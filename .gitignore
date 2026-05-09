@@ -32,3 +32,4 @@ Thumbs.db
 # xlsx (sensitive client data — local only)
 *.xlsx
 IMPORTANT.md
+.token_cache.json

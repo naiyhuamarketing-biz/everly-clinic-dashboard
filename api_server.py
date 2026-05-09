@@ -462,9 +462,49 @@ def clear_cache():
 
 # Module-level runtime caches set by /admin/derive-page-token & /admin/bootstrap.
 # Survive within the same process; Render restart reverts to env vars.
+# Persistence file lets the chain survive restarts WITHOUT requiring a Render env-var
+# edit (which the user might not be able to do at 3am). Token written here on every
+# successful bootstrap; read here on startup. ROOT/.token_cache.json is gitignored.
+_TOKEN_CACHE_FILE = ROOT / ".token_cache.json"
+
 _RUNTIME_PAGE_TOKEN: Optional[str] = None
 _RUNTIME_USER_TOKEN: Optional[str] = None  # bootstrap source for auto-refresh
 _RUNTIME_PAGE_TOKEN_VERIFIED_AT: int = 0   # unix ts of last successful FB call
+
+
+def _persist_runtime_tokens() -> None:
+    """Best-effort write of cached tokens to disk so that Render redeploys/restarts
+    don't lose the chain. Render free tier disk is ephemeral (lost on instance
+    replacement) but persists across normal restarts and code redeploys, which is
+    most of what users hit."""
+    try:
+        payload = {
+            "user_token": _RUNTIME_USER_TOKEN,
+            "page_token": _RUNTIME_PAGE_TOKEN,
+            "verified_at": _RUNTIME_PAGE_TOKEN_VERIFIED_AT,
+            "saved_at": int(time.time()),
+        }
+        _TOKEN_CACHE_FILE.write_text(json.dumps(payload))
+    except Exception:
+        pass  # disk write failures are non-fatal
+
+
+def _load_runtime_tokens() -> None:
+    """Counterpart of _persist_runtime_tokens — load on import."""
+    global _RUNTIME_USER_TOKEN, _RUNTIME_PAGE_TOKEN, _RUNTIME_PAGE_TOKEN_VERIFIED_AT
+    try:
+        if not _TOKEN_CACHE_FILE.exists():
+            return
+        payload = json.loads(_TOKEN_CACHE_FILE.read_text())
+        _RUNTIME_USER_TOKEN = payload.get("user_token") or _RUNTIME_USER_TOKEN
+        _RUNTIME_PAGE_TOKEN = payload.get("page_token") or _RUNTIME_PAGE_TOKEN
+        _RUNTIME_PAGE_TOKEN_VERIFIED_AT = int(payload.get("verified_at") or 0)
+    except Exception:
+        pass
+
+
+# Load on module import — runs once per process start
+_load_runtime_tokens()
 
 
 def _try_auto_refresh_page_token() -> Optional[str]:
@@ -490,6 +530,7 @@ def _try_auto_refresh_page_token() -> Optional[str]:
                 if str(p.get("id")) == str(page_id) and p.get("access_token"):
                     _RUNTIME_PAGE_TOKEN = p["access_token"]
                     _RUNTIME_PAGE_TOKEN_VERIFIED_AT = int(time.time())
+                    _persist_runtime_tokens()
                     return _RUNTIME_PAGE_TOKEN
     except Exception:
         pass
@@ -503,6 +544,7 @@ def _try_auto_refresh_page_token() -> Optional[str]:
         if r.status_code == 200 and r.json().get("access_token"):
             _RUNTIME_PAGE_TOKEN = r.json()["access_token"]
             _RUNTIME_PAGE_TOKEN_VERIFIED_AT = int(time.time())
+            _persist_runtime_tokens()
             return _RUNTIME_PAGE_TOKEN
     except Exception:
         pass
@@ -557,6 +599,8 @@ async def admin_bootstrap(request: Request):
     global _RUNTIME_USER_TOKEN
     _RUNTIME_USER_TOKEN = user_token
     page_token = _try_auto_refresh_page_token()
+    # Persist so Render restart doesn't wipe the chain
+    _persist_runtime_tokens()
     return {
         "ok": page_token is not None,
         "user_token_cached": True,

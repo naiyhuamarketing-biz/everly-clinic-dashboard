@@ -460,9 +460,110 @@ def clear_cache():
     return {"cleared": n}
 
 
-# Module-level runtime override for page token — set by /admin/derive-page-token
-# Survives within the same process; Render restart reverts to env var
+# Module-level runtime caches set by /admin/derive-page-token & /admin/bootstrap.
+# Survive within the same process; Render restart reverts to env vars.
 _RUNTIME_PAGE_TOKEN: Optional[str] = None
+_RUNTIME_USER_TOKEN: Optional[str] = None  # bootstrap source for auto-refresh
+_RUNTIME_PAGE_TOKEN_VERIFIED_AT: int = 0   # unix ts of last successful FB call
+
+
+def _try_auto_refresh_page_token() -> Optional[str]:
+    """If env-stored page token is broken AND we have a cached user_token,
+    automatically derive a fresh page token. Used by funnel endpoints.
+    Returns the new page token on success, None on failure.
+    """
+    user_token = _RUNTIME_USER_TOKEN or os.getenv("FB_USER_TOKEN_NAIYHUA", "")
+    if not user_token:
+        return None
+    page_id = os.getenv("FB_PAGE_ID_EVERLY", "776628652192729")
+    import requests as _r
+    # Try /me/accounts first (most permissive)
+    try:
+        r = _r.get(
+            "https://graph.facebook.com/v20.0/me/accounts",
+            params={"access_token": user_token, "fields": "id,access_token"},
+            timeout=15,
+        )
+        if r.status_code == 200:
+            for p in r.json().get("data", []):
+                if str(p.get("id")) == str(page_id) and p.get("access_token"):
+                    global _RUNTIME_PAGE_TOKEN, _RUNTIME_PAGE_TOKEN_VERIFIED_AT
+                    _RUNTIME_PAGE_TOKEN = p["access_token"]
+                    _RUNTIME_PAGE_TOKEN_VERIFIED_AT = int(time.time())
+                    return _RUNTIME_PAGE_TOKEN
+    except Exception:
+        pass
+    # Fall back to direct page fetch
+    try:
+        r = _r.get(
+            f"https://graph.facebook.com/v20.0/{page_id}",
+            params={"access_token": user_token, "fields": "id,access_token"},
+            timeout=15,
+        )
+        if r.status_code == 200 and r.json().get("access_token"):
+            global _RUNTIME_PAGE_TOKEN, _RUNTIME_PAGE_TOKEN_VERIFIED_AT
+            _RUNTIME_PAGE_TOKEN = r.json()["access_token"]
+            _RUNTIME_PAGE_TOKEN_VERIFIED_AT = int(time.time())
+            return _RUNTIME_PAGE_TOKEN
+    except Exception:
+        pass
+    return None
+
+
+@app.post("/api/everly/admin/bootstrap")
+def admin_bootstrap(payload: dict = Body(...)):
+    """One-call setup: takes a user_token, stores in process memory,
+    immediately derives & caches a page_token. Subsequent funnel calls
+    will use the cached page_token; if it ever fails, /admin/funnel
+    auto-refreshes from the stored user_token.
+
+    User flow:
+      POST {"user_token": "EAA..."} → server caches both, returns status
+      User goes away → server keeps deriving fresh page_tokens as needed
+      Token chain only breaks if user_token itself expires (no auto-refresh
+      yet for user_token; that requires App Live mode or System User).
+    """
+    user_token = (payload.get("user_token") or "").strip()
+    if not user_token:
+        raise HTTPException(400, "user_token required")
+    global _RUNTIME_USER_TOKEN
+    _RUNTIME_USER_TOKEN = user_token
+    page_token = _try_auto_refresh_page_token()
+    return {
+        "ok": page_token is not None,
+        "user_token_cached": True,
+        "page_token_derived": page_token is not None,
+        "page_token_prefix": page_token[:12] if page_token else None,
+        "message": "Funnel will now auto-recover from page-token failures using the cached user_token. "
+                   "If user_token itself expires, dashboard will show ⚠ banner asking for refresh.",
+    }
+
+
+@app.get("/api/everly/admin/token-status")
+def admin_token_status():
+    """Health check for the token chain. Used by dashboard banner."""
+    page_token, page_id = _page_credentials()
+    has_user = bool(_RUNTIME_USER_TOKEN or os.getenv("FB_USER_TOKEN_NAIYHUA", ""))
+    if not page_token or not page_id:
+        return {"ok": False, "stage": "missing", "user_token_available": has_user}
+    # Quick liveness probe
+    import requests as _r
+    try:
+        r = _r.get(
+            f"https://graph.facebook.com/v20.0/{page_id}",
+            params={"access_token": page_token, "fields": "id"},
+            timeout=8,
+        )
+        live = (r.status_code == 200) and ("id" in r.json())
+    except Exception:
+        live = False
+    return {
+        "ok": live,
+        "stage": "live" if live else "expired",
+        "user_token_available": has_user,
+        "auto_refresh_capable": has_user,
+        "verified_at": _RUNTIME_PAGE_TOKEN_VERIFIED_AT,
+    }
 
 
 @app.post("/api/everly/admin/derive-page-token")
@@ -857,6 +958,19 @@ def admin_funnel(
     # Live: pull conversations updated in range (these include both NEW + continuing)
     debug_info = {}
     conversations = _fetch_all_conversations(s_ts, u_ts, _debug=debug_info)
+
+    # Auto-recover: if fetch returned 0 due to a token error, try refreshing the
+    # page_token from the cached user_token (set via /admin/bootstrap), then retry
+    if not conversations and "Malformed access token" in str(debug_info.get("error", "")):
+        debug_info["auto_refresh_attempted"] = True
+        new_token = _try_auto_refresh_page_token()
+        if new_token:
+            debug_info["auto_refresh_ok"] = True
+            debug_info_retry = {}
+            conversations = _fetch_all_conversations(s_ts, u_ts, _debug=debug_info_retry)
+            debug_info.update({k: v for k, v in debug_info_retry.items() if k not in debug_info})
+        else:
+            debug_info["auto_refresh_ok"] = False
 
     activity_total = len(conversations)
     if activity_total == 0:

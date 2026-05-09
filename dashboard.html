@@ -677,11 +677,39 @@
 <!-- ============ TAB PANE: ทีม Admin (DEMO data — to wire) ============ -->
 <div id="tab-admin-pane" class="hidden">
 
-  <div class="demo-banner max-w-[1400px]">
+  <!-- Live token status banner (auto-detect; hidden when chain is healthy) -->
+  <div id="token-status-banner" class="max-w-[1400px] mx-auto px-8 hidden">
+    <div class="rounded-xl p-4 flex items-start gap-3" style="background:#FEF3F0; border:1px solid #F5D7CC;">
+      <span class="text-2xl">⚠️</span>
+      <div class="flex-1">
+        <div class="text-sm font-semibold" style="color:#C76A30">Token หมดอายุ — Funnel กำลังใช้ข้อมูลล่าสุดเท่าที่มี</div>
+        <div class="text-xs mt-1" style="color:var(--soft)" id="token-status-msg">
+          กรุณาเข้า Graph API Explorer → กด Generate Access Token → POST token ไปที่ <code>/api/everly/admin/bootstrap</code> เพื่อกู้คืน
+        </div>
+        <button class="btn btn-ghost btn-sm mt-2" onclick="document.getElementById('token-bootstrap-modal').classList.remove('hidden')">🔧 อัพเดท token ตอนนี้</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Token bootstrap modal -->
+  <div id="token-bootstrap-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center" style="background:rgba(0,0,0,0.5)">
+    <div class="rounded-xl p-6 max-w-md w-full mx-4" style="background:white">
+      <div class="text-lg font-semibold mb-2">🔧 อัพเดท User Token</div>
+      <div class="text-xs mb-4" style="color:var(--soft)">วาง user_token จาก <a href="https://developers.facebook.com/tools/explorer/966060955830858/" target="_blank" class="underline">Graph API Explorer</a> เพื่อกู้คืน funnel</div>
+      <textarea id="token-input" class="w-full p-3 border rounded-lg font-mono text-xs" rows="4" placeholder="EAA..."></textarea>
+      <div id="token-bootstrap-result" class="text-xs mt-2"></div>
+      <div class="flex gap-2 mt-3">
+        <button class="btn btn-primary flex-1" onclick="submitBootstrapToken()">บันทึก</button>
+        <button class="btn btn-ghost" onclick="document.getElementById('token-bootstrap-modal').classList.add('hidden')">ปิด</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="demo-banner max-w-[1400px]" id="demo-banner-admin">
     <span class="text-2xl">⚡</span>
     <div class="flex-1">
-      <div class="text-sm font-semibold text-[var(--rg-deep)]">ส่วนนี้ยังเป็นข้อมูลจำลอง (Demo)</div>
-      <div class="text-xs mt-0.5" style="color:var(--soft)">รอเชื่อม FB Pages Conversations API + AI classification (ขั้นต่อไป) · ตัวเลขด้านล่างเป็นตัวอย่างเพื่อรีวิวดีไซน์</div>
+      <div class="text-sm font-semibold text-[var(--rg-deep)]">ส่วน Silence Trigger + FAQ ยังเป็นข้อมูลจำลอง (Demo)</div>
+      <div class="text-xs mt-0.5" style="color:var(--soft)">Funnel + Response Time + Heatmap = LIVE จาก FB API · ส่วน AI classification รอ sprint ถัดไป</div>
     </div>
   </div>
 
@@ -1970,10 +1998,69 @@ document.querySelectorAll('.main-tab').forEach(btn => {
   btn.addEventListener('click', () => {
     if (btn.dataset.pane === 'admin' && !_adminLoaded) {
       _adminLoaded = true;
-      setTimeout(refreshAdminTab, 200);
+      setTimeout(() => { refreshAdminTab(); checkTokenStatus(); }, 200);
     }
   });
 });
+
+// Token status check + auto-show/hide banner
+async function checkTokenStatus() {
+  try {
+    const r = await fetch('/api/everly/admin/token-status');
+    const d = await r.json();
+    const banner = document.getElementById('token-status-banner');
+    if (!banner) return;
+    if (d.ok) {
+      banner.classList.add('hidden');
+    } else {
+      banner.classList.remove('hidden');
+      const msg = document.getElementById('token-status-msg');
+      if (msg) {
+        msg.textContent = d.user_token_available
+          ? 'Page token หมดอายุ — แต่ระบบมี user_token cached, กำลัง auto-refresh ในการเรียกครั้งถัดไป'
+          : 'Token หมดอายุและไม่มี user_token cached — กรุณาอัพเดท user_token ใหม่';
+      }
+    }
+  } catch (e) { /* ignore */ }
+}
+
+async function submitBootstrapToken() {
+  const input = document.getElementById('token-input');
+  const result = document.getElementById('token-bootstrap-result');
+  const userToken = (input.value || '').trim();
+  if (!userToken.startsWith('EAA') || userToken.length < 100) {
+    result.textContent = '⚠ ดูเหมือนไม่ใช่ user_token (ต้องขึ้นต้น EAA และยาว 100+ chars)';
+    result.style.color = '#C53030';
+    return;
+  }
+  result.textContent = 'กำลังบันทึก...';
+  result.style.color = 'var(--soft)';
+  try {
+    const r = await fetch('/api/everly/admin/bootstrap', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({user_token: userToken}),
+    });
+    const d = await r.json();
+    if (d.ok) {
+      result.textContent = '✅ บันทึกสำเร็จ — funnel จะใช้ token ใหม่ทันที';
+      result.style.color = '#16A34A';
+      setTimeout(() => {
+        document.getElementById('token-bootstrap-modal').classList.add('hidden');
+        input.value = '';
+        result.textContent = '';
+        refreshAdminTab();
+        checkTokenStatus();
+      }, 1500);
+    } else {
+      result.textContent = '✗ ' + (d.message || JSON.stringify(d));
+      result.style.color = '#C53030';
+    }
+  } catch (e) {
+    result.textContent = '✗ Error: ' + e.message;
+    result.style.color = '#C53030';
+  }
+}
 </script>
 
 </body>

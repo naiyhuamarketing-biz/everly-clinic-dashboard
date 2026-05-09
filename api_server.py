@@ -472,6 +472,7 @@ def _try_auto_refresh_page_token() -> Optional[str]:
     automatically derive a fresh page token. Used by funnel endpoints.
     Returns the new page token on success, None on failure.
     """
+    global _RUNTIME_PAGE_TOKEN, _RUNTIME_PAGE_TOKEN_VERIFIED_AT
     user_token = _RUNTIME_USER_TOKEN or os.getenv("FB_USER_TOKEN_NAIYHUA", "")
     if not user_token:
         return None
@@ -487,7 +488,6 @@ def _try_auto_refresh_page_token() -> Optional[str]:
         if r.status_code == 200:
             for p in r.json().get("data", []):
                 if str(p.get("id")) == str(page_id) and p.get("access_token"):
-                    global _RUNTIME_PAGE_TOKEN, _RUNTIME_PAGE_TOKEN_VERIFIED_AT
                     _RUNTIME_PAGE_TOKEN = p["access_token"]
                     _RUNTIME_PAGE_TOKEN_VERIFIED_AT = int(time.time())
                     return _RUNTIME_PAGE_TOKEN
@@ -501,7 +501,6 @@ def _try_auto_refresh_page_token() -> Optional[str]:
             timeout=15,
         )
         if r.status_code == 200 and r.json().get("access_token"):
-            global _RUNTIME_PAGE_TOKEN, _RUNTIME_PAGE_TOKEN_VERIFIED_AT
             _RUNTIME_PAGE_TOKEN = r.json()["access_token"]
             _RUNTIME_PAGE_TOKEN_VERIFIED_AT = int(time.time())
             return _RUNTIME_PAGE_TOKEN

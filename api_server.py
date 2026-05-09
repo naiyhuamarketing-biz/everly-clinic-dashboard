@@ -608,27 +608,47 @@ def admin_token_debug():
 
 @app.get("/api/everly/admin/token-status")
 def admin_token_status():
-    """Health check for the token chain. Used by dashboard banner."""
+    """Health check for the token chain. Used by dashboard banner.
+    Optimistic: if the env page_token's live probe fails AND a user_token
+    is cached, proactively auto-refresh BEFORE reporting status. The banner
+    therefore only shows when even the auto-refresh path is blocked, which
+    matches the actual user-facing state of 'broken / needs intervention'.
+    """
+    import requests as _r
+
+    def probe(tok, pid):
+        try:
+            r = _r.get(
+                f"https://graph.facebook.com/v20.0/{pid}",
+                params={"access_token": tok, "fields": "id"},
+                timeout=8,
+            )
+            return (r.status_code == 200) and ("id" in r.json())
+        except Exception:
+            return False
+
     page_token, page_id = _page_credentials()
     has_user = bool(_RUNTIME_USER_TOKEN or os.getenv("FB_USER_TOKEN_NAIYHUA", ""))
+    refreshed = False
+
     if not page_token or not page_id:
-        return {"ok": False, "stage": "missing", "user_token_available": has_user}
-    # Quick liveness probe
-    import requests as _r
-    try:
-        r = _r.get(
-            f"https://graph.facebook.com/v20.0/{page_id}",
-            params={"access_token": page_token, "fields": "id"},
-            timeout=8,
-        )
-        live = (r.status_code == 200) and ("id" in r.json())
-    except Exception:
         live = False
+    else:
+        live = probe(page_token, page_id)
+        if not live and has_user:
+            # Auto-recover before reporting failure
+            new_tok = _try_auto_refresh_page_token()
+            if new_tok:
+                page_token, page_id = _page_credentials()
+                live = probe(page_token, page_id)
+                refreshed = bool(live)
+
     return {
         "ok": live,
-        "stage": "live" if live else "expired",
+        "stage": "live" if live else ("missing" if not page_token else "expired"),
         "user_token_available": has_user,
         "auto_refresh_capable": has_user,
+        "auto_refreshed_just_now": refreshed,
         "verified_at": _RUNTIME_PAGE_TOKEN_VERIFIED_AT,
     }
 

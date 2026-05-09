@@ -1800,37 +1800,37 @@ function renderAll() {
 (function init() {
   const today = isoToday();
 
-  // Populate preset pill HTML for all sections (same 13 presets everywhere)
-  document.getElementById('ov-presets').innerHTML = presetPillsHTML('month');
-  document.getElementById('dy-presets').innerHTML = presetPillsHTML('today');
-  document.getElementById('tp-presets').innerHTML = presetPillsHTML('7d');
-  document.getElementById('rp-presets').innerHTML = presetPillsHTML('yesterday');
+  // Populate preset pill HTML for all sections.
+  // NOTE: dy-* elements (Daily Operations) were removed; guard each lookup so
+  // a missing element doesn't break init() and prevent the main tab switcher from binding.
+  const safeSetHTML = (id, html) => { const el = document.getElementById(id); if (el) el.innerHTML = html; };
+  const safeSetVal  = (id, val) => { const el = document.getElementById(id); if (el) el.value = val; };
+  const safeOnChange = (id, fn) => { const el = document.getElementById(id); if (el) el.addEventListener('change', fn); };
+
+  safeSetHTML('ov-presets', presetPillsHTML('month'));
+  safeSetHTML('tp-presets', presetPillsHTML('7d'));
+  safeSetHTML('rp-presets', presetPillsHTML('yesterday'));
 
   // Initial date pickers
-  document.getElementById('ov-since').value = monthStart();
-  document.getElementById('ov-until').value = today;
-  document.getElementById('dy-since').value = today;
-  document.getElementById('dy-until').value = today;
-  document.getElementById('tp-since').value = isoNDaysAgo(6);
-  document.getElementById('tp-until').value = today;
-  document.getElementById('rp-since').value = isoYesterday();
-  document.getElementById('rp-until').value = isoYesterday();
+  safeSetVal('ov-since', monthStart());
+  safeSetVal('ov-until', today);
+  safeSetVal('tp-since', isoNDaysAgo(6));
+  safeSetVal('tp-until', today);
+  safeSetVal('rp-since', isoYesterday());
+  safeSetVal('rp-until', isoYesterday());
 
   // Wire preset buttons (delegated since HTML was just populated)
   document.querySelectorAll('#ov-presets .range-pill').forEach(b => b.addEventListener('click', () => overviewPresetClick(b.dataset.preset)));
-  document.querySelectorAll('#dy-presets .range-pill').forEach(b => b.addEventListener('click', () => dailyPresetClick(b.dataset.preset)));
   document.querySelectorAll('#tp-presets .range-pill').forEach(b => b.addEventListener('click', () => topPresetClick(b.dataset.preset)));
   document.querySelectorAll('#rp-presets .range-pill').forEach(b => b.addEventListener('click', () => reportPresetClick(b.dataset.preset)));
 
   // Wire date inputs
-  document.getElementById('ov-since').addEventListener('change', () => { presetDeselect('ov'); fetchOverview(); });
-  document.getElementById('ov-until').addEventListener('change', () => { presetDeselect('ov'); fetchOverview(); });
-  document.getElementById('dy-since').addEventListener('change', () => { presetDeselect('dy'); fetchDailyRange(); });
-  document.getElementById('dy-until').addEventListener('change', () => { presetDeselect('dy'); fetchDailyRange(); });
-  document.getElementById('tp-since').addEventListener('change', () => { presetDeselect('tp'); fetchTopRange(); });
-  document.getElementById('tp-until').addEventListener('change', () => { presetDeselect('tp'); fetchTopRange(); });
-  document.getElementById('rp-since').addEventListener('change', () => { presetDeselect('rp'); fetchReport(); });
-  document.getElementById('rp-until').addEventListener('change', () => { presetDeselect('rp'); fetchReport(); });
+  safeOnChange('ov-since', () => { presetDeselect('ov'); fetchOverview(); });
+  safeOnChange('ov-until', () => { presetDeselect('ov'); fetchOverview(); });
+  safeOnChange('tp-since', () => { presetDeselect('tp'); fetchTopRange(); });
+  safeOnChange('tp-until', () => { presetDeselect('tp'); fetchTopRange(); });
+  safeOnChange('rp-since', () => { presetDeselect('rp'); fetchReport(); });
+  safeOnChange('rp-until', () => { presetDeselect('rp'); fetchReport(); });
 
   renderAll();
   setTimeout(()=> setSaving(false), 100);

@@ -2024,6 +2024,37 @@ async function checkTokenStatus() {
   } catch (e) { /* ignore */ }
 }
 
+// Auto-bootstrap from URL hash. Lets a sister tab (e.g. Graph API Explorer)
+// open `https://everly-clinic.onrender.com/#bootstrap=EAA...` and have the
+// dashboard self-heal without any user interaction. The hash is client-side only
+// (never sent to server logs); we POST it to /admin/bootstrap from same origin.
+(async () => {
+  const m = (location.hash || '').match(/[#&]bootstrap=([^&]+)/);
+  if (!m) return;
+  const tok = decodeURIComponent(m[1]);
+  // Strip the hash so the token doesn't linger in the address bar / history
+  history.replaceState(null, '', location.pathname + location.search);
+  if (!tok.startsWith('EAA') || tok.length < 50) return;
+  try {
+    const r = await fetch('/api/everly/admin/bootstrap', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_token: tok }),
+    });
+    const d = await r.json();
+    console.log('[auto-bootstrap]', d.ok ? 'OK' : 'FAIL', d.message || '');
+    // Trigger a quick toast-style notice (created lazily to avoid clobbering layout)
+    const banner = document.createElement('div');
+    banner.style.cssText = 'position:fixed;top:14px;right:14px;z-index:99999;padding:12px 18px;border-radius:10px;background:'+(d.ok?'#E8F5E9':'#FEEAEA')+';color:'+(d.ok?'#2E7D32':'#C53030')+';box-shadow:0 4px 16px rgba(0,0,0,.12);font-weight:600;font-size:13px;';
+    banner.textContent = d.ok ? '✅ Token อัพเดทแล้ว · Funnel กลับมาใช้งานได้' : '⚠ Bootstrap failed: ' + (d.message || JSON.stringify(d));
+    document.body.appendChild(banner);
+    setTimeout(() => banner.remove(), 6000);
+    if (typeof refreshAdminTab === 'function') setTimeout(refreshAdminTab, 800);
+  } catch (e) {
+    console.error('[auto-bootstrap] error:', e);
+  }
+})();
+
 async function submitBootstrapToken() {
   const input = document.getElementById('token-input');
   const result = document.getElementById('token-bootstrap-result');

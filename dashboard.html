@@ -774,7 +774,7 @@
                 <div class="funnel-count">9 คน</div>
               </div>
               <div class="funnel-row" style="border-top: 1px dashed var(--line); padding-top: 14px; margin-top: 8px;">
-                <div class="funnel-label font-bold" style="color:var(--rg-deep)"><span class="icon">📞</span><b>ให้เบอร์</b></div>
+                <div class="funnel-label font-bold" style="color:var(--rg-deep)"><span class="icon">📞</span><b>ได้เบอร์</b></div>
                 <div class="funnel-track"><div class="funnel-fill" style="width:46%; background: linear-gradient(90deg, var(--sage), #5C8060); font-size: 13px;">🎯 46%</div></div>
                 <div class="funnel-count text-lg font-bold" style="color:var(--sage)">13 คน</div>
               </div>
@@ -1823,7 +1823,7 @@ function renderAdminFunnel(d) {
   const funnelSection = document.getElementById('sec-funnel');
   if (!funnelSection) return;
   const rows = funnelSection.querySelectorAll('.funnel-row');
-  // Rows in HTML order: ทัก, คุย 2+, 4+, 6+, 8+, 10+, ให้เบอร์ (last is special)
+  // Rows in HTML order: ทัก, คุย 2+, 4+, 6+, 8+, 10+, ได้เบอร์ (last is special)
   const stagesHtmlOrder = d.stages || [];
   rows.forEach((row, i) => {
     const stage = stagesHtmlOrder[i];

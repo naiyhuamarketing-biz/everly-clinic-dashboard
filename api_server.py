@@ -10,6 +10,7 @@ from __future__ import annotations
 import os
 import json
 import time
+import re
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
@@ -620,30 +621,62 @@ def _page_credentials():
     return token, pid
 
 
-def _fetch_first_message_ts(conv_id: str, token: str, since_ts: Optional[int] = None) -> Optional[int]:
-    """Fetch the chronologically OLDEST message timestamp of a conversation.
-    Returns None on error. Used to determine if a conversation is genuinely "new" within a date range.
+# Thai phone number patterns — match common formats customers send in chat
+_PHONE_PATTERNS = [
+    # Mobile: 0[6,8,9]XXXXXXXX (10 digits, optional separators)
+    re.compile(r'0\s*[689]\s*\d\s*[-.\s]?\s*\d\s*\d\s*\d\s*[-.\s]?\s*\d\s*\d\s*\d\s*\d?'),
+    # International: +66[6,8,9]XXXXXXXX
+    re.compile(r'\+?\s*66\s*[689]\s*\d\s*\d\s*\d\s*\d\s*\d\s*\d\s*\d\s*\d?'),
+]
 
-    FB Graph /messages returns reverse-chronological by default and IGNORES order params.
-    So we paginate forward until we find the oldest. If `since_ts` is provided, we
-    short-circuit as soon as we encounter ANY message older than since_ts (because that
-    proves the conversation predates the range — exact first ts not needed).
+def _text_has_phone(text: str) -> bool:
+    """Detect Thai mobile phone number in message text. Strips Zalgo/zero-width
+    chars then checks against Thai mobile patterns. Filters out FB user IDs and
+    timestamps that might match by accident (≥11 contiguous digits → not a phone)."""
+    if not text:
+        return False
+    # Normalize: strip thai digits → arabic, remove zero-width chars
+    s = str(text)
+    s = s.translate(str.maketrans("๐๑๒๓๔๕๖๗๘๙", "0123456789"))
+    s = re.sub(r'[​‌‍﻿]', '', s)
+    # If the candidate contains a 12+ digit run, it's likely an FB ID, not a phone
+    for m in _PHONE_PATTERNS:
+        match = m.search(s)
+        if match:
+            digits = re.sub(r'\D', '', match.group())
+            # Thai mobile is exactly 10 digits (or 11 with country code)
+            if 9 <= len(digits) <= 11:
+                return True
+    return False
+
+
+def _analyze_conversation_messages(conv_id: str, token: str, since_ts: Optional[int] = None) -> dict:
+    """Paginate through a conversation's messages, tracking BOTH:
+      - oldest_ts: chronologically first message timestamp (true conversation start)
+      - has_phone: whether any customer message contains a Thai mobile number
+    Returns {oldest_ts, has_phone, error}. Short-circuits pagination when an oldest
+    message older than since_ts is found (conv is OLD; no need to keep paginating).
     """
     import requests as _r
     next_url = f"https://graph.facebook.com/v20.0/{conv_id}/messages"
-    params = {"limit": 100, "fields": "created_time", "access_token": token}
+    params = {"limit": 100, "fields": "created_time,message", "access_token": token}
     oldest_seen: Optional[int] = None
+    has_phone = False
 
     try:
-        for _ in range(20):  # up to 2000 msgs per conversation safety cap
+        for _ in range(20):  # safety cap: 2000 msgs per conversation
             r = _r.get(next_url, params=params, timeout=15)
             if r.status_code != 200:
-                return None
+                return {"oldest_ts": oldest_seen, "has_phone": has_phone, "error": True}
             data = r.json()
             msgs = data.get("data", [])
             if not msgs:
                 break
             for msg in msgs:
+                if not has_phone:
+                    text = msg.get("message", "")
+                    if text and _text_has_phone(text):
+                        has_phone = True
                 ts_str = msg.get("created_time", "")
                 try:
                     ts_dt = datetime.strptime(ts_str.split("+")[0], "%Y-%m-%dT%H:%M:%S")
@@ -652,16 +685,21 @@ def _fetch_first_message_ts(conv_id: str, token: str, since_ts: Optional[int] = 
                     continue
                 if oldest_seen is None or ts < oldest_seen:
                     oldest_seen = ts
-                # Short-circuit: any msg older than since_ts → conv is old, no need to find exact first
-                if since_ts is not None and ts < since_ts:
-                    return ts
+            # Short-circuit: oldest seen so far is already before since_ts → conv is OLD
+            if since_ts is not None and oldest_seen is not None and oldest_seen < since_ts:
+                return {"oldest_ts": oldest_seen, "has_phone": has_phone, "error": False}
             next_url = (data.get("paging") or {}).get("next")
             if not next_url:
                 break
-            params = {}  # next_url contains full querystring
-        return oldest_seen
+            params = {}
+        return {"oldest_ts": oldest_seen, "has_phone": has_phone, "error": False}
     except Exception:
-        return oldest_seen
+        return {"oldest_ts": oldest_seen, "has_phone": has_phone, "error": True}
+
+
+# Backwards-compat shim: callers expecting just ts.
+def _fetch_first_message_ts(conv_id: str, token: str, since_ts: Optional[int] = None) -> Optional[int]:
+    return _analyze_conversation_messages(conv_id, token, since_ts).get("oldest_ts")
 
 
 def _fetch_all_conversations(since_ts: int, until_ts: int, _debug: dict = None) -> list:
@@ -768,7 +806,7 @@ def admin_funnel(
                 {"label": "คุย 6+ ประโยค", "count": 14, "pct": 50},
                 {"label": "คุย 8+ ประโยค", "count": 11, "pct": 39},
                 {"label": "คุย 10+ ประโยค", "count": 9, "pct": 32},
-                {"label": "ให้เบอร์", "count": 13, "pct": 46, "highlight": True},
+                {"label": "ได้เบอร์", "count": 13, "pct": 46, "highlight": True},
             ],
             "total_inbox": 28,
             "no_reply": 3,
@@ -802,17 +840,19 @@ def admin_funnel(
     from concurrent.futures import ThreadPoolExecutor
 
     def _check(c):
-        ts = _fetch_first_message_ts(c["id"], token, since_ts=s_ts)
-        return c, ts
+        result = _analyze_conversation_messages(c["id"], token, since_ts=s_ts)
+        return c, result
 
-    # Parallelize first-message fetch (10 workers ≈ 3-4× faster than sequential)
+    # Parallelize per-conversation message analysis (10 workers ≈ 3-4× faster)
     with ThreadPoolExecutor(max_workers=10) as pool:
-        for c, ts in pool.map(_check, conversations):
+        for c, result in pool.map(_check, conversations):
+            ts = result.get("oldest_ts")
             if ts is None:
                 fetch_errors += 1
                 continue
             if s_ts <= ts <= u_ts:
                 c["first_message_ts"] = ts
+                c["has_phone"] = bool(result.get("has_phone"))
                 new_conversations.append(c)
             else:
                 skipped_old += 1
@@ -835,6 +875,9 @@ def admin_funnel(
     def count_at(min_msg: int) -> int:
         return sum(1 for c in new_conversations if (c.get("message_count") or 0) >= min_msg)
 
+    # Final stage: ได้เบอร์ — count NEW conversations where customer sent a Thai phone number
+    phones_count = sum(1 for c in new_conversations if c.get("has_phone"))
+
     stages = [
         {"label": "ทัก", "count": total, "pct": 100, "highlight": False},
         {"label": "คุย 2+ ประโยค", "count": count_at(2), "pct": round(count_at(2) / total * 100), "highlight": False},
@@ -842,6 +885,7 @@ def admin_funnel(
         {"label": "คุย 6+ ประโยค", "count": count_at(6), "pct": round(count_at(6) / total * 100), "highlight": False},
         {"label": "คุย 8+ ประโยค", "count": count_at(8), "pct": round(count_at(8) / total * 100), "highlight": False},
         {"label": "คุย 10+ ประโยค", "count": count_at(10), "pct": round(count_at(10) / total * 100), "highlight": False},
+        {"label": "ได้เบอร์", "count": phones_count, "pct": round(phones_count / total * 100), "highlight": True},
     ]
 
     # No-reply: new convs with only 1 message (customer messaged, page didn't respond yet)

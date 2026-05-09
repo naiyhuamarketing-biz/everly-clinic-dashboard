@@ -864,6 +864,9 @@ def admin_funnel(
             "since": s.isoformat(), "until": u.isoformat(),
             "configured": True, "total_inbox": 0,
             "stages": [], "no_reply": 0, "ghosted": 0,
+            "response_time": {"samples": 0, "avg_min": None, "distribution": {"under_5min": 0, "min_5_30": 0, "min_30_60": 0, "over_1h": 0}, "slow_count": 0, "currently_waiting": 0},
+            "hourly_heatmap": [0]*24,
+            "lead_quality": {"conversion_rate": 0, "phones_count": 0, "avg_messages_to_phone": None},
             "debug": debug_info,
         }
 
@@ -912,6 +915,9 @@ def admin_funnel(
             "since": s.isoformat(), "until": u.isoformat(),
             "configured": True, "total_inbox": 0,
             "stages": [], "no_reply": 0, "ghosted": 0,
+            "response_time": {"samples": 0, "avg_min": None, "distribution": {"under_5min": 0, "min_5_30": 0, "min_30_60": 0, "over_1h": 0}, "slow_count": 0, "currently_waiting": 0},
+            "hourly_heatmap": [0]*24,
+            "lead_quality": {"conversion_rate": 0, "phones_count": 0, "avg_messages_to_phone": None},
             "debug": debug_info,
         }
 

@@ -1289,13 +1289,22 @@ def _build_admin_message_corpus(s_ts: int, u_ts: int) -> dict:
       conversations: list of {id, message_count, first_message_ts, last_msg_ts,
                               last_msg_from_customer, customer_messages: [{ts, text}]}
       activity_total, fetched_total, errors
+    Includes auto-refresh: if the initial fetch returns 0 due to a token error
+    (Render restart cleared in-memory token, env has stale one), tries to refresh
+    from the cached user_token before giving up.
     """
     import requests as _r
     token, page_id = _page_credentials()
     if not (token and page_id):
         return {"conversations": [], "activity_total": 0, "fetched_total": 0, "errors": "no creds"}
 
-    convs = _fetch_all_conversations(s_ts, u_ts)
+    debug = {}
+    convs = _fetch_all_conversations(s_ts, u_ts, _debug=debug)
+    if not convs and "Malformed access token" in str(debug.get("error", "")):
+        # Auto-recover from cached user_token if available
+        if _try_auto_refresh_page_token():
+            token, page_id = _page_credentials()  # refresh local references
+            convs = _fetch_all_conversations(s_ts, u_ts)
     activity_total = len(convs)
 
     out = []

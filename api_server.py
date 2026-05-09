@@ -1197,6 +1197,7 @@ def admin_funnel(
             "phones_count": phones_count,
             "avg_messages_to_phone": avg_msgs_to_phone,
         },
+        "data_source": "FB Pages Conversations API",
         "fetched_at": now_bkk().isoformat(),
         "debug": debug_info,
     }
@@ -1283,20 +1284,40 @@ def _classify_faq(text: str) -> Optional[str]:
     return _FAQ_OTHER_LABEL
 
 
+# In-memory corpus cache. Funnel + Silence + FAQ all walk every message of every
+# conversation in the date range — that's expensive (paginated FB API calls per
+# conversation). The same date range is queried 3× back-to-back when the dashboard
+# loads and every time the date filter changes. Cache by (since, until) with TTL.
+_CORPUS_CACHE: dict = {}
+_CORPUS_CACHE_TTL = 90  # seconds — short enough to feel live, long enough to amortize 3 endpoints
+
+
 def _build_admin_message_corpus(s_ts: int, u_ts: int) -> dict:
     """Helper: pull all conversations updated in range, then for each fetch ALL messages,
     keeping only customer-side messages (from.id != page_id). Returns:
       conversations: list of {id, message_count, first_message_ts, last_msg_ts,
                               last_msg_from_customer, customer_messages: [{ts, text}]}
-      activity_total, fetched_total, errors
-    Includes auto-refresh: if the initial fetch returns 0 due to a token error
-    (Render restart cleared in-memory token, env has stale one), tries to refresh
-    from the cached user_token before giving up.
+      activity_total, fetched_total, errors, cached_at (unix), cache_age_sec
+    Cached for 90 seconds per (since, until) to keep three back-to-back endpoint
+    calls (funnel, silence-trigger, faq) from re-fetching the same data three times.
+    Includes auto-refresh: if the initial fetch returns 0 due to a token error,
+    tries to refresh from the cached user_token before giving up.
     """
     import requests as _r
+    cache_key = (s_ts, u_ts)
+    now = int(time.time())
+    cached = _CORPUS_CACHE.get(cache_key)
+    if cached and (now - cached["cached_at"]) < _CORPUS_CACHE_TTL:
+        # Return a shallow copy with up-to-date age, preserving original cached_at
+        out = dict(cached)
+        out["cache_age_sec"] = now - cached["cached_at"]
+        out["cache_hit"] = True
+        return out
+
     token, page_id = _page_credentials()
     if not (token and page_id):
-        return {"conversations": [], "activity_total": 0, "fetched_total": 0, "errors": "no creds"}
+        return {"conversations": [], "activity_total": 0, "fetched_total": 0, "errors": "no creds",
+                "cached_at": now, "cache_age_sec": 0, "cache_hit": False}
 
     debug = {}
     convs = _fetch_all_conversations(s_ts, u_ts, _debug=debug)
@@ -1362,7 +1383,9 @@ def _build_admin_message_corpus(s_ts: int, u_ts: int) -> dict:
             return "error"
 
     from concurrent.futures import ThreadPoolExecutor
-    with ThreadPoolExecutor(max_workers=10) as pool:
+    # 25 workers — FB Graph API tolerates this for /conversations/messages reads;
+    # cuts wall time from ~30s → ~5s on a 100-conv range.
+    with ThreadPoolExecutor(max_workers=25) as pool:
         for result in pool.map(_fetch_full, convs):
             if result == "error":
                 errors += 1
@@ -1370,7 +1393,24 @@ def _build_admin_message_corpus(s_ts: int, u_ts: int) -> dict:
                 # Only count if first_message in range (genuinely NEW conversation)
                 if result.get("first_message_ts") and s_ts <= result["first_message_ts"] <= u_ts:
                     out.append(result)
-    return {"conversations": out, "activity_total": activity_total, "fetched_total": len(out), "errors": errors}
+
+    payload = {
+        "conversations": out,
+        "activity_total": activity_total,
+        "fetched_total": len(out),
+        "errors": errors,
+        "cached_at": now,
+        "cache_age_sec": 0,
+        "cache_hit": False,
+    }
+    # Write to cache only on success (avoid caching errored 0-result responses)
+    if activity_total > 0 or errors == 0:
+        _CORPUS_CACHE[cache_key] = payload
+        # Trim cache size — keep at most 16 most recent ranges
+        if len(_CORPUS_CACHE) > 16:
+            oldest_key = min(_CORPUS_CACHE, key=lambda k: _CORPUS_CACHE[k]["cached_at"])
+            _CORPUS_CACHE.pop(oldest_key, None)
+    return payload
 
 
 @app.get("/api/everly/admin/silence-trigger")
@@ -1439,6 +1479,9 @@ def admin_silence_trigger(
         "until": u.isoformat(),
         "total_ghosted": total,
         "categories": rows,
+        "data_source": "FB Pages Conversations API",
+        "cache_age_sec": corpus.get("cache_age_sec", 0),
+        "cache_hit": corpus.get("cache_hit", False),
         "debug": {
             "activity_total": corpus["activity_total"],
             "fetched_total": corpus["fetched_total"],
@@ -1503,6 +1546,9 @@ def admin_faq(
         "total_messages": total_messages,
         "total_questions": total_questions,
         "topics": rows,
+        "data_source": "FB Pages Conversations API",
+        "cache_age_sec": corpus.get("cache_age_sec", 0),
+        "cache_hit": corpus.get("cache_hit", False),
         "debug": {
             "activity_total": corpus["activity_total"],
             "fetched_total": corpus["fetched_total"],

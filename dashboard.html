@@ -705,13 +705,7 @@
     </div>
   </div>
 
-  <div class="demo-banner max-w-[1400px]" id="demo-banner-admin">
-    <span class="text-2xl">⚡</span>
-    <div class="flex-1">
-      <div class="text-sm font-semibold text-[var(--rg-deep)]">ส่วน Silence Trigger + FAQ ยังเป็นข้อมูลจำลอง (Demo)</div>
-      <div class="text-xs mt-0.5" style="color:var(--soft)">Funnel + Response Time + Heatmap = LIVE จาก FB API · ส่วน AI classification รอ sprint ถัดไป</div>
-    </div>
-  </div>
+  <!-- All admin sections now LIVE — banner removed (was misleading after Silence/FAQ wiring) -->
 
   <!-- ── Shared Date Filter for Admin Tab ── -->
   <section class="max-w-[1400px] mx-auto px-8 pt-2 pb-2">
@@ -736,7 +730,12 @@
     <details class="section" id="sec-funnel" open>
       <summary>
         <div>
-          <div class="sec-eyebrow">Funnel</div>
+          <div class="sec-eyebrow flex items-center gap-2">
+            <span>Funnel</span>
+            <span id="funnel-live-pill" class="pill" style="background:#ECFDF5; color:#16A34A; padding:2px 9px; font-size:9px; letter-spacing:.15em">
+              <span style="width:6px; height:6px; border-radius:50%; background:#16A34A; display:inline-block; box-shadow:0 0 0 3px rgba(22,163,74,.18); animation:pulse 1.4s infinite"></span> LIVE FROM FB
+            </span>
+          </div>
           <div class="sec-title" id="sec-funnel-title">Funnel</div>
           <div class="sec-meta" id="sec-funnel-meta">จากทักจนได้เบอร์ · cumulative · % คิดจากคนทักทั้งหมด</div>
         </div>
@@ -902,9 +901,14 @@
     <details class="section" id="sec-silence" open>
       <summary>
         <div>
-          <div class="sec-eyebrow">Silence Trigger</div>
+          <div class="sec-eyebrow flex items-center gap-2">
+            <span>Silence Trigger</span>
+            <span id="silence-live-pill" class="pill" style="background:#ECFDF5; color:#16A34A; padding:2px 9px; font-size:9px; letter-spacing:.15em">
+              <span style="width:6px; height:6px; border-radius:50%; background:#16A34A; display:inline-block; box-shadow:0 0 0 3px rgba(22,163,74,.18); animation:pulse 1.4s infinite"></span> LIVE FROM FB
+            </span>
+          </div>
           <div class="sec-title">🔻 ลูกค้าหายเพราะอะไร</div>
-          <div class="sec-meta" id="sec-silence-meta">✅ LIVE · จำแนก ghosted customers ตาม keyword จากข้อความสุดท้าย</div>
+          <div class="sec-meta" id="sec-silence-meta">FB Pages Conversations API · keyword classifier จากข้อความสุดท้าย 3 ข้อความ</div>
         </div>
         <div class="chev">▾</div>
       </summary>
@@ -939,9 +943,14 @@
     <details class="section" id="sec-faq" open>
       <summary>
         <div>
-          <div class="sec-eyebrow">FAQ Patterns</div>
+          <div class="sec-eyebrow flex items-center gap-2">
+            <span>FAQ Patterns</span>
+            <span id="faq-live-pill" class="pill" style="background:#ECFDF5; color:#16A34A; padding:2px 9px; font-size:9px; letter-spacing:.15em">
+              <span style="width:6px; height:6px; border-radius:50%; background:#16A34A; display:inline-block; box-shadow:0 0 0 3px rgba(22,163,74,.18); animation:pulse 1.4s infinite"></span> LIVE FROM FB
+            </span>
+          </div>
           <div class="sec-title">❓ ถามอะไรบ่อยที่สุด</div>
-          <div class="sec-meta" id="sec-faq-meta">✅ LIVE · จัดกลุ่มคำถามจริงจาก inbox</div>
+          <div class="sec-meta" id="sec-faq-meta">FB Pages Conversations API · จัดกลุ่มคำถามจริงจาก inbox</div>
         </div>
         <div class="chev">▾</div>
       </summary>
@@ -1883,8 +1892,8 @@ function renderAdminFunnel(d) {
   // Update section meta
   const meta = funnelSection.querySelector('.sec-meta');
   if (meta) {
-    const tag = d.configured ? '✅ LIVE' : '⚡ MOCK';
-    meta.innerHTML = `${tag} · ${d.since} → ${d.until} · ${total} conversations · % คิดจาก ${total}`;
+    const src = d.data_source || 'FB Pages API';
+    meta.innerHTML = `${src} · ${d.since} → ${d.until} · ${total} ลูกค้าใหม่ · cumulative · % คิดจาก ${total} ทัก`;
   }
 
   // ── Response time stats ──
@@ -1979,10 +1988,12 @@ function renderSilenceTrigger(d) {
   const total = d.total_ghosted || 0;
   const meta = document.getElementById('sec-silence-meta');
   if (meta) {
+    const src = d.data_source || 'FB Pages API';
+    const cacheTag = d.cache_hit ? ` · cached ${d.cache_age_sec}s ago` : '';
     if (total === 0) {
-      meta.textContent = `✅ LIVE · ${d.since} → ${d.until} · ยังไม่มี ghosted customers ในช่วงนี้ (เกณฑ์: เงียบ > 24 ชม.)`;
+      meta.textContent = `${src} · ${d.since} → ${d.until} · ยังไม่มี ghosted customers (เกณฑ์: เงียบ > 24 ชม.)${cacheTag}`;
     } else {
-      meta.textContent = `✅ LIVE · ${d.since} → ${d.until} · ${total} ghosted customers · จำแนกจาก keyword ในข้อความสุดท้าย`;
+      meta.textContent = `${src} · ${d.since} → ${d.until} · ${total} ghosted · จำแนกจาก keyword ในข้อความสุดท้าย${cacheTag}`;
     }
   }
   const container = document.getElementById('silence-rows');
@@ -2037,7 +2048,9 @@ function renderFAQ(d) {
   const totalQ = d.total_questions || 0;
   const meta = document.getElementById('sec-faq-meta');
   if (meta) {
-    meta.textContent = `✅ LIVE · ${d.since} → ${d.until} · ${d.total_messages || 0} ข้อความลูกค้า · ${totalQ} ที่เป็นคำถาม · จัดเป็น ${rows.length} หัวข้อ`;
+    const src = d.data_source || 'FB Pages API';
+    const cacheTag = d.cache_hit ? ` · cached ${d.cache_age_sec}s ago` : '';
+    meta.textContent = `${src} · ${d.since} → ${d.until} · ${d.total_messages || 0} ข้อความ · ${totalQ} คำถาม · ${rows.length} หัวข้อ${cacheTag}`;
   }
   const container = document.getElementById('faq-rows');
   if (container) {

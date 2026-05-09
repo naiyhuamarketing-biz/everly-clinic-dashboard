@@ -1893,7 +1893,8 @@ function renderAdminFunnel(d) {
   const meta = funnelSection.querySelector('.sec-meta');
   if (meta) {
     const src = d.data_source || 'FB Pages API';
-    meta.innerHTML = `${src} · ${d.since} → ${d.until} · ${total} ลูกค้าใหม่ · cumulative · % คิดจาก ${total} ทัก`;
+    const cacheTag = d.cache_hit ? ` · cached ${d.cache_age_sec}s ago` : '';
+    meta.innerHTML = `${src} · ${d.since} → ${d.until} · ${total} ลูกค้าใหม่ · % คิดจาก ${total} ทัก${cacheTag}`;
   }
 
   // ── Response time stats ──

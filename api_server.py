@@ -998,6 +998,17 @@ def admin_funnel(
     s_ts = int(s_dt.timestamp())
     u_ts = int(u_dt.timestamp())
 
+    # Result cache — return cached funnel response if recent (avoids re-fetching
+    # every conversation's messages on tab open / filter change)
+    cache_key = (s_ts, u_ts)
+    now_unix = int(time.time())
+    cached = _FUNNEL_CACHE.get(cache_key)
+    if cached and (now_unix - cached["_cached_at"]) < _FUNNEL_CACHE_TTL:
+        out = {k: v for k, v in cached.items() if k != "_cached_at"}
+        out["cache_age_sec"] = now_unix - cached["_cached_at"]
+        out["cache_hit"] = True
+        return out
+
     token, pid = _page_credentials()
     if not (token and pid):
         # Fallback to mock if env vars not set
@@ -1067,8 +1078,8 @@ def admin_funnel(
         result = _analyze_conversation_messages(c["id"], token, since_ts=s_ts, page_id=page_id)
         return c, result
 
-    # Parallelize per-conversation message analysis (10 workers ≈ 3-4× faster)
-    with ThreadPoolExecutor(max_workers=10) as pool:
+    # Parallelize per-conversation message analysis (25 workers; matches corpus builder)
+    with ThreadPoolExecutor(max_workers=25) as pool:
         for c, result in pool.map(_check, conversations):
             ts = result.get("oldest_ts")
             if ts is None:
@@ -1171,7 +1182,7 @@ def admin_funnel(
         if msgs_with_phone:
             avg_msgs_to_phone = round(sum(msgs_with_phone) / len(msgs_with_phone), 1)
 
-    return {
+    response_payload = {
         "since": s.isoformat(),
         "until": u.isoformat(),
         "configured": True,
@@ -1198,9 +1209,17 @@ def admin_funnel(
             "avg_messages_to_phone": avg_msgs_to_phone,
         },
         "data_source": "FB Pages Conversations API",
+        "cache_age_sec": 0,
+        "cache_hit": False,
         "fetched_at": now_bkk().isoformat(),
         "debug": debug_info,
     }
+    # Cache result so the next dashboard refresh / sister-section call returns instantly
+    _FUNNEL_CACHE[cache_key] = {**response_payload, "_cached_at": now_unix}
+    if len(_FUNNEL_CACHE) > 16:
+        oldest = min(_FUNNEL_CACHE, key=lambda k: _FUNNEL_CACHE[k]["_cached_at"])
+        _FUNNEL_CACHE.pop(oldest, None)
+    return response_payload
 
 
 # ── Silence Trigger + FAQ classification (keyword-based) ──────────
@@ -1290,6 +1309,11 @@ def _classify_faq(text: str) -> Optional[str]:
 # loads and every time the date filter changes. Cache by (since, until) with TTL.
 _CORPUS_CACHE: dict = {}
 _CORPUS_CACHE_TTL = 90  # seconds — short enough to feel live, long enough to amortize 3 endpoints
+
+# Funnel response cache (separate from corpus because funnel does its own per-conv analysis
+# with phone detection + response-time computation that the corpus doesn't include).
+_FUNNEL_CACHE: dict = {}
+_FUNNEL_CACHE_TTL = 90
 
 
 def _build_admin_message_corpus(s_ts: int, u_ts: int) -> dict:

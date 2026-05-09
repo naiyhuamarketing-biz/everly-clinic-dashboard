@@ -567,6 +567,45 @@ async def admin_bootstrap(request: Request):
     }
 
 
+@app.get("/api/everly/admin/token-debug")
+def admin_token_debug():
+    """Diagnostic — does NOT return token values, only metadata.
+    Useful for debugging the auto-refresh chain when funnel returns 0."""
+    user_token = _RUNTIME_USER_TOKEN or os.getenv("FB_USER_TOKEN_NAIYHUA", "")
+    page_token, page_id = _page_credentials()
+    info = {
+        "page_id": page_id,
+        "user_token": {
+            "cached_in_memory": bool(_RUNTIME_USER_TOKEN),
+            "from_env": bool(os.getenv("FB_USER_TOKEN_NAIYHUA")),
+            "len": len(user_token) if user_token else 0,
+            "prefix": user_token[:12] if user_token else None,
+            "suffix": user_token[-8:] if user_token else None,
+        },
+        "page_token": {
+            "from_runtime": bool(_RUNTIME_PAGE_TOKEN),
+            "from_env": bool(os.getenv("FB_PAGE_TOKEN_EVERLY")),
+            "len": len(page_token) if page_token else 0,
+            "prefix": page_token[:12] if page_token else None,
+            "verified_at": _RUNTIME_PAGE_TOKEN_VERIFIED_AT,
+        },
+    }
+    # Live test of user_token by calling /me
+    if user_token:
+        import requests as _r
+        try:
+            r = _r.get("https://graph.facebook.com/v20.0/me",
+                       params={"access_token": user_token, "fields": "id,name"}, timeout=10)
+            info["user_token"]["live_test"] = {
+                "status": r.status_code,
+                "ok": r.status_code == 200,
+                "body": r.text[:200] if r.status_code != 200 else r.json(),
+            }
+        except Exception as e:
+            info["user_token"]["live_test"] = {"error": str(e)}
+    return info
+
+
 @app.get("/api/everly/admin/token-status")
 def admin_token_status():
     """Health check for the token chain. Used by dashboard banner."""

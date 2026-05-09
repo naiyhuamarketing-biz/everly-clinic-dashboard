@@ -682,11 +682,14 @@
     <div class="rounded-xl p-4 flex items-start gap-3" style="background:#FEF3F0; border:1px solid #F5D7CC;">
       <span class="text-2xl">⚠️</span>
       <div class="flex-1">
-        <div class="text-sm font-semibold" style="color:#C76A30">Token หมดอายุ — Funnel กำลังใช้ข้อมูลล่าสุดเท่าที่มี</div>
+        <div class="text-sm font-semibold" style="color:#C76A30">FB token หมดอายุ — Funnel ใช้ข้อมูลล่าสุดเท่าที่มี</div>
         <div class="text-xs mt-1" style="color:var(--soft)" id="token-status-msg">
-          กรุณาเข้า Graph API Explorer → กด Generate Access Token → POST token ไปที่ <code>/api/everly/admin/bootstrap</code> เพื่อกู้คืน
+          อัพเดทใหม่ใช้เวลา <b>10 วินาที</b>: เปิด Graph Explorer → กด Generate Access Token → ระบบจะเชื่อมให้อัตโนมัติ
         </div>
-        <button class="btn btn-ghost btn-sm mt-2" onclick="document.getElementById('token-bootstrap-modal').classList.remove('hidden')">🔧 อัพเดท token ตอนนี้</button>
+        <div class="flex gap-2 mt-2">
+          <button class="btn btn-primary btn-sm" onclick="quickRefreshToken()">🔄 Refresh ทันที (1-click)</button>
+          <button class="btn btn-ghost btn-sm" onclick="document.getElementById('token-bootstrap-modal').classList.remove('hidden')">📝 หรือ paste token เอง</button>
+        </div>
       </div>
     </div>
   </div>
@@ -2157,6 +2160,32 @@ async function checkTokenStatus() {
     console.error('[auto-bootstrap] error:', e);
   }
 })();
+
+// One-click token refresh: opens Graph Explorer + the bootstrap modal pre-focused
+// so the user can paste right after they generate. Cross-origin restrictions
+// prevent fully-automatic token harvesting (FB blocks postMessage from us, blocks
+// our scripts from running on their page) — paste-through is the practical path.
+function quickRefreshToken() {
+  const explorerUrl = 'https://developers.facebook.com/tools/explorer/966060955830858/';
+  // Open Graph Explorer in a new window
+  window.open(explorerUrl, 'graphExplorer', 'width=1100,height=820,menubar=no,toolbar=no,scrollbars=yes');
+  // Open the bootstrap modal in our dashboard so paste-target is ready
+  const modal = document.getElementById('token-bootstrap-modal');
+  if (modal) modal.classList.remove('hidden');
+  setTimeout(() => {
+    const input = document.getElementById('token-input');
+    if (input) input.focus();
+  }, 300);
+  // Persistent instructional toast
+  let toast = document.getElementById('qrf-toast');
+  if (toast) toast.remove();
+  toast = document.createElement('div');
+  toast.id = 'qrf-toast';
+  toast.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:99999;padding:14px 22px;border-radius:10px;background:#1F2937;color:#fff;font-size:13px;line-height:1.6;max-width:560px;box-shadow:0 4px 16px rgba(0,0,0,.25);';
+  toast.innerHTML = '⏳ <b>3 ขั้นตอน:</b><br/>1️⃣ ในหน้าต่าง Graph Explorer ที่เปิดใหม่ → กด <b>"Generate Access Token"</b> (ปุ่มน้ำเงิน)<br/>2️⃣ ดำเนินการต่อในป็อปอัพ FB (กด "ดำเนินการต่อ")<br/>3️⃣ <b>copy token แล้ว paste ในกล่องที่เปิดอยู่นี้</b> → กด บันทึก';
+  document.body.appendChild(toast);
+  setTimeout(() => { if (toast.parentNode) toast.remove(); }, 30000);
+}
 
 async function submitBootstrapToken() {
   const input = document.getElementById('token-input');

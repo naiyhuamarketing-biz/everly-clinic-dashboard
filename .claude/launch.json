@@ -1,0 +1,31 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "FastAPI backend (api_server)",
+      "runtimeExecutable": ".venv/bin/uvicorn",
+      "runtimeArgs": [
+        "api_server:app",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8000",
+        "--reload"
+      ],
+      "port": 8000
+    },
+    {
+      "name": "Streamlit dashboard (legacy)",
+      "runtimeExecutable": ".venv/bin/streamlit",
+      "runtimeArgs": [
+        "run",
+        "dashboard.py",
+        "--server.port",
+        "8501",
+        "--server.headless",
+        "true"
+      ],
+      "port": 8501
+    }
+  ]
+}

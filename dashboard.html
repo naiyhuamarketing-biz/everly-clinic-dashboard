@@ -1825,14 +1825,26 @@ function renderAll() {
   // Populate preset pills + date inputs for Admin tab.
   // Currently using mock data — preset clicks just show toast until we wire FB Pages API.
   if (document.getElementById('ad-presets')) {
-    document.getElementById('ad-presets').innerHTML = presetPillsHTML('today');
-    document.getElementById('ad-since').value = isoToday();
+    // Default range = last 30 days (more useful than just-today, since admin tab
+    // analyses funnel/silence/faq over a window — single-day always looks empty
+    // before traffic accumulates)
+    document.getElementById('ad-presets').innerHTML = presetPillsHTML('30d');
+    document.getElementById('ad-since').value = isoNDaysAgo(29);
     document.getElementById('ad-until').value = isoToday();
+    // Wrapper that refreshes ALL three admin sections at once. The original
+    // preset wiring only called refreshAdminTab() (funnel), which left
+    // silence/faq stuck at the initial date range — clicking '30 วันที่แล้ว'
+    // updated funnel but not silence/faq. Now they all stay in sync.
+    const refreshAllAdmin = () => {
+      if (typeof refreshAdminTab === 'function') refreshAdminTab();
+      if (typeof refreshSilenceTrigger === 'function') refreshSilenceTrigger();
+      if (typeof refreshFAQ === 'function') refreshFAQ();
+    };
     document.querySelectorAll('#ad-presets .range-pill').forEach(b => {
-      b.addEventListener('click', () => applyPreset('ad', b.dataset.preset, refreshAdminTab));
+      b.addEventListener('click', () => applyPreset('ad', b.dataset.preset, refreshAllAdmin));
     });
-    document.getElementById('ad-since').addEventListener('change', () => { presetDeselect('ad'); refreshAdminTab(); });
-    document.getElementById('ad-until').addEventListener('change', () => { presetDeselect('ad'); refreshAdminTab(); });
+    document.getElementById('ad-since').addEventListener('change', () => { presetDeselect('ad'); refreshAllAdmin(); });
+    document.getElementById('ad-until').addEventListener('change', () => { presetDeselect('ad'); refreshAllAdmin(); });
   }
 })();
 

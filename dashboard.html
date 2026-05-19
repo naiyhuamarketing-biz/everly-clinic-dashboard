@@ -352,6 +352,38 @@
   .hr-cell { aspect-ratio: 1/1; border-radius: 3px; background: var(--cream); position: relative; cursor: default; }
   .hr-cell::after { content: attr(data-hr); position: absolute; bottom: -14px; left: 50%; transform: translateX(-50%); font-size: 8px; color: var(--soft); }
 
+  /* Live ticker pulsing dot */
+  @keyframes liveDotPulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(255, 80, 80, 0.7); }
+    50% { box-shadow: 0 0 0 8px rgba(255, 80, 80, 0); }
+  }
+  .pulse-live {
+    display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+    background: #FF5050; animation: liveDotPulse 1.6s infinite;
+  }
+
+  /* Inbox queue rows */
+  .queue-row {
+    display: flex; align-items: center; gap: 12px; padding: 8px 12px;
+    background: rgba(255,255,255,.06); border-radius: 8px;
+    border-left: 3px solid var(--queue-color, #A8997A);
+    transition: background .2s;
+  }
+  .queue-row:hover { background: rgba(255,255,255,.1); }
+  .queue-row.urgent { --queue-color: #FF5050; }
+  .queue-row.warn { --queue-color: #FFB14A; }
+  .queue-row.cool { --queue-color: #4ADE80; }
+  .queue-wait { width: 70px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .queue-text { flex: 1; font-size: 12px; color: #E8D9B8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .queue-msgs { font-size: 10px; color: #A8997A; }
+
+  /* Counter animation when number changes */
+  @keyframes countUpFlash {
+    0% { background: rgba(255, 200, 100, .35); }
+    100% { background: transparent; }
+  }
+  .num-flash { animation: countUpFlash 1.4s ease-out; border-radius: 6px; padding: 0 4px; }
+
   .faq-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px dashed var(--line-soft); }
   .faq-row:last-child { border-bottom: none; }
   .faq-num { font-family: 'Italiana'; font-size: 18px; color: var(--gold); width: 30px; }
@@ -725,6 +757,46 @@
         </div>
       </div>
       <div class="text-[10px] mt-2" style="color:var(--soft)">ฟิลเตอร์นี้ใช้กับทุก section ใน "ทีม Admin" · เปลี่ยนช่วงเวลา → ตัวเลขทุก section อัปเดตพร้อมกัน</div>
+    </div>
+  </section>
+
+  <!-- ════════ LIVE TICKER + INBOX QUEUE (real-time, polls every 30s) ════════ -->
+  <section class="max-w-[1400px] mx-auto px-8 pt-2 pb-6">
+    <div class="rounded-2xl overflow-hidden" style="background:linear-gradient(135deg, var(--rg-deepest) 0%, var(--rg-deep) 100%); color:#FDF7E8;">
+      <!-- Live ticker bar (always visible) -->
+      <div class="px-6 py-4 flex flex-wrap items-center gap-6 border-b" style="border-color:rgba(255,255,255,.1)">
+        <div class="flex items-center gap-2 text-[10px] font-bold tracking-[.25em] uppercase" style="color:#F5DA9C">
+          <span class="pulse-live"></span> LIVE NOW
+        </div>
+        <div>
+          <div class="text-[10px] uppercase tracking-wider" style="color:#D9C4A0">ทักวันนี้</div>
+          <div class="text-3xl font-bold leading-none mt-1" id="live-today-count" style="color:#FDF7E8;font-variant-numeric:tabular-nums">—</div>
+        </div>
+        <div>
+          <div class="text-[10px] uppercase tracking-wider" style="color:#D9C4A0">รอตอบอยู่ (&gt;5 นาที)</div>
+          <div class="text-3xl font-bold leading-none mt-1" id="live-waiting-count" style="color:#FFB89B;font-variant-numeric:tabular-nums">—</div>
+        </div>
+        <div>
+          <div class="text-[10px] uppercase tracking-wider" style="color:#D9C4A0">รอนานสุด</div>
+          <div class="text-3xl font-bold leading-none mt-1" id="live-longest-wait" style="color:#FF9D8A;font-variant-numeric:tabular-nums">—</div>
+        </div>
+        <div class="flex-1 text-right">
+          <div class="text-[10px] uppercase tracking-wider" style="color:#D9C4A0">ทักล่าสุด</div>
+          <div class="text-sm mt-1" id="live-last-message" style="color:#FDF7E8">—</div>
+        </div>
+        <div class="text-[10px]" style="color:#A8997A" id="live-poll-status">poll ทุก 30 วิ</div>
+      </div>
+
+      <!-- Inbox queue: customers waiting for admin reply -->
+      <div class="px-6 py-4">
+        <div class="flex items-center justify-between mb-3">
+          <div class="text-xs font-semibold uppercase tracking-wider" style="color:#F5DA9C">📥 Inbox Queue — ลูกค้ารอตอบ</div>
+          <div class="text-[10px]" style="color:#A8997A" id="live-queue-meta">เรียงจากรอนานสุด</div>
+        </div>
+        <div id="live-queue-list" class="space-y-2">
+          <div class="text-xs py-2" style="color:#A8997A">กำลังโหลด...</div>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -2101,13 +2173,124 @@ function renderFAQ(d) {
   }
 }
 
+// ════════ LIVE TICKER + INBOX QUEUE — poll /admin/live-stats every 30s ════════
+let _livePollTimer = null;
+let _lastTodayCount = null;
+
+function setNum(elId, newVal, isText) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  const old = el.textContent;
+  const next = isText ? newVal : String(newVal);
+  if (old !== next && old !== '—') {
+    el.classList.remove('num-flash'); void el.offsetWidth; el.classList.add('num-flash');
+  }
+  el.textContent = next;
+}
+
+function fmtTimeAgo(seconds) {
+  if (seconds == null) return '—';
+  if (seconds < 60) return `${seconds} วินาทีที่แล้ว`;
+  const min = Math.floor(seconds / 60);
+  if (min < 60) return `${min} นาทีที่แล้ว`;
+  const hr = Math.floor(min / 60);
+  return `${hr} ชม. ${min % 60} นาที`;
+}
+
+function classifyWait(min) {
+  if (min >= 15) return 'urgent';
+  if (min >= 8) return 'warn';
+  return 'cool';
+}
+
+async function fetchLiveStats() {
+  try {
+    const status = document.getElementById('live-poll-status');
+    if (status) status.textContent = '🔄 อัพเดท...';
+    const r = await fetch('/api/everly/admin/live-stats');
+    const d = await r.json();
+
+    setNum('live-today-count', d.today_inbox_count ?? 0);
+    setNum('live-waiting-count', d.waiting_count ?? 0);
+    setNum('live-longest-wait', (d.longest_wait_min ?? 0) > 0 ? `${d.longest_wait_min} นาที` : '—', true);
+    setNum('live-last-message', fmtTimeAgo(d.seconds_since_last_message), true);
+
+    // Detect new ทัก — flash toast if count went up
+    if (_lastTodayCount !== null && d.today_inbox_count > _lastTodayCount) {
+      const delta = d.today_inbox_count - _lastTodayCount;
+      showLiveToast(`🆕 ${delta} ลูกค้าใหม่ทักเข้ามา`);
+    }
+    _lastTodayCount = d.today_inbox_count;
+
+    // Render inbox queue
+    const list = document.getElementById('live-queue-list');
+    const meta = document.getElementById('live-queue-meta');
+    if (list) {
+      const queue = d.inbox_queue || [];
+      if (queue.length === 0) {
+        list.innerHTML = '<div class="text-xs py-2" style="color:#A8997A">✓ ไม่มีลูกค้ารอ — admin ตอบทันทุกคน</div>';
+        if (meta) meta.textContent = 'ทุกคนได้รับการตอบเรียบร้อย';
+      } else {
+        list.innerHTML = queue.map(q => {
+          const cls = classifyWait(q.wait_min);
+          const emoji = cls === 'urgent' ? '🔴' : cls === 'warn' ? '🟡' : '🟢';
+          return `<div class="queue-row ${cls}"><div class="queue-wait">${emoji} ${q.wait_min} นาที</div><div class="queue-text">"${(q.last_text || '—').replace(/"/g, '&quot;')}"</div><div class="queue-msgs">${q.message_count} ข้อความ</div></div>`;
+        }).join('');
+        if (meta) meta.textContent = `${queue.length} คนรอ · เรียงจากนานสุด`;
+      }
+    }
+
+    if (status) {
+      const cacheTag = d.cache_hit ? ` · cached ${d.cache_age_sec}s` : '';
+      status.textContent = `อัพเดทล่าสุด ${new Date().toLocaleTimeString('th-TH', {hour:'2-digit', minute:'2-digit', second:'2-digit'})}${cacheTag}`;
+    }
+  } catch (e) {
+    const status = document.getElementById('live-poll-status');
+    if (status) status.textContent = '⚠ network error — retrying';
+    console.error('[live-stats]', e);
+  }
+}
+
+function showLiveToast(msg) {
+  const t = document.createElement('div');
+  t.style.cssText = 'position:fixed;top:80px;right:20px;z-index:99999;padding:14px 20px;border-radius:12px;background:linear-gradient(135deg,#16A34A,#22C55E);color:white;font-size:14px;font-weight:600;box-shadow:0 6px 24px rgba(22,163,74,.3);transform:translateX(120%);transition:transform .4s;';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.style.transform = 'translateX(0)', 50);
+  setTimeout(() => { t.style.transform = 'translateX(120%)'; setTimeout(() => t.remove(), 400); }, 4000);
+}
+
+function startLivePolling() {
+  fetchLiveStats();
+  if (_livePollTimer) clearInterval(_livePollTimer);
+  _livePollTimer = setInterval(() => {
+    // Pause when tab is not visible to save API quota
+    if (document.visibilityState === 'visible') fetchLiveStats();
+  }, 30_000);
+}
+function stopLivePolling() {
+  if (_livePollTimer) { clearInterval(_livePollTimer); _livePollTimer = null; }
+}
+
+// Pause polling when admin tab is hidden, resume when shown
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && !document.getElementById('tab-admin-pane').classList.contains('hidden')) {
+    fetchLiveStats();
+  }
+});
+
 // Auto-fetch funnel when admin tab is opened for the first time
 let _adminLoaded = false;
 document.querySelectorAll('.main-tab').forEach(btn => {
   btn.addEventListener('click', () => {
-    if (btn.dataset.pane === 'admin' && !_adminLoaded) {
-      _adminLoaded = true;
-      setTimeout(() => { refreshAdminTab(); refreshSilenceTrigger(); refreshFAQ(); checkTokenStatus(); }, 200);
+    if (btn.dataset.pane === 'admin') {
+      if (!_adminLoaded) {
+        _adminLoaded = true;
+        setTimeout(() => { refreshAdminTab(); refreshSilenceTrigger(); refreshFAQ(); checkTokenStatus(); }, 200);
+      }
+      startLivePolling();
+    } else {
+      stopLivePolling();
     }
   });
 });

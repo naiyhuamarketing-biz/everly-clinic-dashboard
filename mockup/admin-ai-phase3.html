@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8" />
+<title>Phase 3 Preview — AI-Powered Admin Tab</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Cormorant+Garamond:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ivory: #F8F2E8;
+    --cream: #EFE5D2;
+    --line: #E5D4B6;
+    --line-soft: #F0E5CC;
+    --rg-deepest: #4A2918;
+    --rg-deep: #6B4330;
+    --rg-mid: #8A5B42;
+    --rg-light: #A87D5F;
+    --rg-pale: #C9A98A;
+    --gold: #C9A968;
+    --warm: #D0784A;
+    --soft: #8C7456;
+    --gray: #B5A88D;
+    --rose: #A85C4E;
+  }
+  body { font-family: 'Inter', sans-serif; background: #F4ECDC; color: var(--rg-deepest); }
+  .font-serif { font-family: 'Cormorant Garamond', serif; }
+  .num { font-family: 'Inter', sans-serif; font-variant-numeric: tabular-nums lining-nums; }
+  .card { background: var(--ivory); border: 1px solid var(--line-soft); border-radius: 16px; }
+  .section { background: var(--ivory); border: 1px solid var(--line); border-radius: 20px; padding: 24px 32px; margin-bottom: 24px; }
+  .sec-eyebrow { font-size: 10px; letter-spacing: .25em; color: var(--soft); text-transform: uppercase; font-weight: 600; }
+  .sec-title { font-family: 'Cormorant Garamond', serif; font-size: 28px; font-weight: 600; line-height: 1.1; margin-top: 4px; }
+  .sec-meta { font-size: 12px; color: var(--soft); margin-top: 4px; }
+  .hairline { height: 1px; background: var(--line-soft); margin: 16px 0; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; font-size: 10px; letter-spacing: .15em; font-weight: 600; }
+  .pill-live { background: #ECFDF5; color: #16A34A; }
+  .pill-ai { background: #EFE5FF; color: #6B3FA0; }
+  .pill-warn { background: #FEF3F0; color: #C76A30; }
+  @keyframes pulse { 0%, 100% { opacity: 1 } 50% { opacity: .3 } }
+  .pulse-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; animation: pulse 1.4s infinite; }
+
+  /* Silence Point bars */
+  .sp-row { display: flex; align-items: center; gap: 12px; padding: 8px 0; font-size: 13px; }
+  .sp-label { width: 200px; color: var(--rg-deep); }
+  .sp-track { flex: 1; height: 24px; background: var(--cream); border-radius: 6px; overflow: hidden; position: relative; }
+  .sp-fill { height: 100%; border-radius: 6px; display: flex; align-items: center; justify-content: flex-end; padding-right: 8px; color: white; font-size: 11px; font-weight: 600; }
+  .sp-count { width: 90px; text-align: right; font-weight: 600; }
+
+  /* Conversation deep-dive */
+  .conv-card { background: var(--cream); border: 1px solid var(--line-soft); border-radius: 12px; padding: 16px; }
+  .msg-bubble-cust { background: #fff; border: 1px solid var(--line-soft); border-radius: 14px 14px 14px 4px; padding: 10px 14px; max-width: 80%; font-size: 13px; }
+  .msg-bubble-admin { background: var(--rg-deep); color: white; border-radius: 14px 14px 4px 14px; padding: 10px 14px; max-width: 80%; font-size: 13px; margin-left: auto; }
+  .msg-meta { font-size: 10px; color: var(--soft); margin-top: 4px; }
+  .ai-card { background: linear-gradient(135deg, #F3EBFF 0%, #FFF 100%); border: 1px solid #D9C4F0; border-radius: 14px; padding: 18px; }
+  .ai-card-bullet { display: flex; gap: 10px; padding: 8px 0; font-size: 13px; align-items: start; line-height: 1.5; }
+
+  /* Reply suggestion cards */
+  .reply-suggestion { background: var(--ivory); border: 1px solid var(--line); border-radius: 12px; padding: 14px; cursor: pointer; transition: all .2s; }
+  .reply-suggestion:hover { border-color: var(--rg-deep); background: white; }
+  .reply-suggestion .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 9px; font-weight: 700; letter-spacing: .1em; margin-bottom: 8px; }
+
+  /* Daily coaching */
+  .coaching-card { background: linear-gradient(135deg, #FFF8E6 0%, #FFFEFC 100%); border: 1px solid #F1E2A8; border-radius: 16px; padding: 24px; }
+
+  /* Inter numbers */
+  .stat-num { font-family: 'Inter', sans-serif; font-weight: 700; font-size: 36px; line-height: 1; }
+</style>
+</head>
+<body class="px-8 py-10">
+
+<div class="max-w-[1400px] mx-auto">
+
+  <!-- Header -->
+  <div class="mb-10">
+    <div class="font-serif text-4xl font-semibold mb-2">Phase 3 Preview — AI-Powered Admin</div>
+    <div class="text-sm" style="color:var(--soft)">3 features ใหม่ที่จะเพิ่ม → mockup เพื่อรีวิว design ก่อน implement</div>
+  </div>
+
+  <!-- ════════════════════ FEATURE 3A: Silence Point ════════════════════ -->
+  <section class="section">
+    <div class="flex items-start justify-between mb-2">
+      <div>
+        <div class="sec-eyebrow flex items-center gap-2">
+          <span>Silence Point Distribution</span>
+          <span class="pill pill-live"><span class="pulse-dot"></span> LIVE FROM FB</span>
+        </div>
+        <div class="sec-title">📉 ลูกค้าหายที่ข้อความไหน</div>
+        <div class="sec-meta">วิเคราะห์จาก 26 ghosted conversations ในช่วง 30 วันที่แล้ว · ไม่ต้องใช้ AI</div>
+      </div>
+      <span class="pill" style="background:#E8F5E9;color:#2E7D32">FREE · 2 ชม. dev</span>
+    </div>
+    <div class="hairline"></div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+      <div class="card p-6 lg:col-span-2">
+        <div class="text-xs font-semibold mb-4" style="color:var(--rg-deep)">จุดที่ลูกค้าเงียบเป็นครั้งแรก</div>
+        <div>
+          <div class="sp-row"><div class="sp-label">หลังข้อความแรกของลูกค้า</div><div class="sp-track"><div class="sp-fill" style="width:88%; background:#C53030">11</div></div><div class="sp-count num">42%</div></div>
+          <div class="sp-row"><div class="sp-label">หลังข้อความที่ 2-3</div><div class="sp-track"><div class="sp-fill" style="width:60%; background:var(--warm)">8</div></div><div class="sp-count num">31%</div></div>
+          <div class="sp-row"><div class="sp-label">หลังข้อความที่ 4-5</div><div class="sp-track"><div class="sp-fill" style="width:30%; background:var(--gold)">4</div></div><div class="sp-count num">15%</div></div>
+          <div class="sp-row"><div class="sp-label">หลังข้อความที่ 6-10</div><div class="sp-track"><div class="sp-fill" style="width:15%; background:var(--rg-light)">2</div></div><div class="sp-count num">8%</div></div>
+          <div class="sp-row"><div class="sp-label">หลังคุยยาว 10+ ข้อความ</div><div class="sp-track"><div class="sp-fill" style="width:8%; background:var(--rg-deep)">1</div></div><div class="sp-count num">4%</div></div>
+        </div>
+        <div class="hairline"></div>
+        <div class="text-xs leading-relaxed" style="color:var(--soft)">
+          💡 <b style="color:var(--rg-deep)">Top finding:</b> 42% หายหลังข้อความแรกที่ admin ตอบกลับ → ปัญหาน่าจะอยู่ที่ greeting/first reply<br/>
+          📌 <b style="color:var(--rg-deep)">รองลงมา:</b> 31% หายช่วงข้อความ 2-3 → ลูกค้าไม่ได้ข้อมูลที่ต้องการ
+        </div>
+      </div>
+
+      <div class="space-y-4">
+        <div class="card p-5" style="background:linear-gradient(135deg, #FEF3F0 0%, var(--ivory) 100%); border-color:#F5D7CC">
+          <div class="text-xs font-semibold mb-2 uppercase tracking-wider" style="color:#C76A30">🎯 ลองทำดู</div>
+          <div class="font-serif text-lg leading-snug mb-3" style="color:var(--rg-deepest)">First reply ของ admin คือจุดที่สูญเสียเยอะที่สุด</div>
+          <ul class="text-xs space-y-2 leading-relaxed" style="color:var(--rg-deep)">
+            <li>• ตอบทันที (&lt; 2 นาที) ด้วยข้อความอุ่น ๆ ส่วนตัว</li>
+            <li>• <b>ห้าม</b> ส่งราคาก่อนถามชื่อ/ความต้องการ</li>
+            <li>• ใช้ template "อยากดูแลลูกค้าด้านไหนเป็นพิเศษคะ?"</li>
+            <li>• ส่งรูป before/after เป็น tease แทนราคา</li>
+          </ul>
+        </div>
+        <div class="card p-5">
+          <div class="text-xs font-semibold mb-1" style="color:var(--soft)">เคสที่หาย vs เคสที่ได้เบอร์</div>
+          <div class="flex items-end gap-3 mt-3">
+            <div><div class="stat-num" style="color:#C53030">26</div><div class="text-xs" style="color:var(--soft)">หาย</div></div>
+            <div class="text-2xl" style="color:var(--soft)">vs</div>
+            <div><div class="stat-num" style="color:#16A34A">7</div><div class="text-xs" style="color:var(--soft)">ได้เบอร์</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════════════════ FEATURE 3C: AI Conversation Deep-Dive ════════════════════ -->
+  <section class="section">
+    <div class="flex items-start justify-between mb-2">
+      <div>
+        <div class="sec-eyebrow flex items-center gap-2">
+          <span>AI Conversation Analyzer</span>
+          <span class="pill pill-ai">🤖 CLAUDE AI</span>
+        </div>
+        <div class="sec-title">🔬 เจาะลึกแต่ละบทสนทนา</div>
+        <div class="sec-meta">คลิก conversation ใด ๆ → AI วิเคราะห์ sentiment, hesitation, แนะนำขั้นต่อไป</div>
+      </div>
+      <span class="pill" style="background:#F3EBFF;color:#6B3FA0">$30/เดือน · 6 ชม. dev</span>
+    </div>
+    <div class="hairline"></div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      <!-- Left: Conversation transcript -->
+      <div class="conv-card">
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <div class="font-serif text-lg" style="color:var(--rg-deepest)">คุณ ส. (#m_2169...49237)</div>
+            <div class="text-xs" style="color:var(--soft)">2 ชม. ที่แล้ว · 8 ข้อความ · ยังไม่ตอบ</div>
+          </div>
+          <span class="pill pill-warn">⚠ GHOSTED</span>
+        </div>
+        <div class="space-y-3 max-h-[420px] overflow-y-auto pr-2">
+          <div><div class="msg-bubble-cust">สวัสดีค่ะ ไหมอะไรคะ</div><div class="msg-meta">14:02</div></div>
+          <div><div class="msg-bubble-admin">สวัสดีค่ะคุณ ที่นี่มีไหมหลายชนิดค่ะ ไหม PDO ไหม PCL ค่ะ สนใจช่วงไหนคะ</div><div class="msg-meta">14:08 · ตอบช้า 6 นาที</div></div>
+          <div><div class="msg-bubble-cust">แก้มกับคางค่ะ ราคาเท่าไหร่</div><div class="msg-meta">14:09</div></div>
+          <div><div class="msg-bubble-admin">เริ่มต้น 12,000 บาทค่ะ</div><div class="msg-meta">14:25 · ตอบช้า 16 นาที 🔴</div></div>
+          <div><div class="msg-bubble-cust">โอเคค่ะ ขอคิดดูก่อน</div><div class="msg-meta">14:26</div></div>
+          <div class="text-center text-xs py-3" style="color:var(--soft)">— เงียบหายไปตั้งแต่ 14:26 (2 ชม. ที่แล้ว) —</div>
+        </div>
+      </div>
+
+      <!-- Right: AI analysis -->
+      <div class="space-y-4">
+        <div class="ai-card">
+          <div class="flex items-center gap-2 mb-3">
+            <span class="pill pill-ai">🤖 AI Analysis</span>
+            <span class="text-xs" style="color:var(--soft)">claude-haiku-4.5 · 2.3s</span>
+          </div>
+          <div class="font-serif text-xl mb-3" style="color:var(--rg-deepest)">หายเพราะ <b>"ราคาช็อก + รอตอบนาน"</b></div>
+          <div class="ai-card-bullet"><span style="color:#16A34A">😊</span><span><b>เริ่มต้น (msg 1):</b> สนใจจริงจัง — ถามตรง ไม่อ้อม</span></div>
+          <div class="ai-card-bullet"><span style="color:#E0A030">😐</span><span><b>กลาง (msg 3-4):</b> เริ่มลังเล — admin ใช้เวลานานก่อนแจ้งราคา</span></div>
+          <div class="ai-card-bullet"><span style="color:#C53030">😞</span><span><b>สุดท้าย (msg 5):</b> "ขอคิดดูก่อน" = ราคาเกินงบ + ไม่ได้รับข้อมูลที่ปลอบใจ</span></div>
+        </div>
+
+        <div class="ai-card">
+          <div class="text-xs font-semibold mb-3 uppercase tracking-wider" style="color:#6B3FA0">💬 แนะนำตอบกลับ (Follow-up)</div>
+          <div class="space-y-2 text-sm leading-relaxed" style="color:var(--rg-deepest)">
+            <p>"สวัสดีค่ะคุณ 🌟 พอดีพี่ดูว่าคุณสนใจปรับแก้ม-คาง ตอนนี้พี่มี <b>โปรพิเศษ ฉีดไหม PDO เริ่มต้น 8,990 บาท</b> (จากปกติ 12,000) นะคะ ผ่อน 0% 3 เดือนได้ค่ะ สะดวกมาปรึกษาวันไหนดีคะ?"</p>
+          </div>
+          <div class="mt-3 flex gap-2">
+            <button class="text-xs px-3 py-1.5 rounded-lg bg-[var(--rg-deep)] text-white">📋 Copy</button>
+            <button class="text-xs px-3 py-1.5 rounded-lg border" style="border-color:var(--line)">🔄 สุ่มอีกแบบ</button>
+            <button class="text-xs px-3 py-1.5 rounded-lg border" style="border-color:var(--line)">📤 ส่งให้ admin</button>
+          </div>
+        </div>
+
+        <div class="card p-4" style="background:var(--cream)">
+          <div class="text-xs font-semibold mb-1" style="color:var(--rg-deep)">📊 Hesitation Score</div>
+          <div class="flex items-center gap-3">
+            <div class="flex-1 h-3 rounded-full overflow-hidden" style="background:#fff">
+              <div class="h-full" style="width:78%; background:linear-gradient(90deg, var(--warm), var(--rose));"></div>
+            </div>
+            <div class="num font-bold" style="color:var(--rose)">78/100</div>
+          </div>
+          <div class="text-xs mt-1" style="color:var(--soft)">ลังเลสูง · ต้อง follow up ภายใน 24 ชม.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════════════════ FEATURE 3D: AI Reply Suggestions (real-time) ════════════════════ -->
+  <section class="section">
+    <div class="flex items-start justify-between mb-2">
+      <div>
+        <div class="sec-eyebrow flex items-center gap-2">
+          <span>AI Reply Suggestions</span>
+          <span class="pill pill-ai">🤖 CLAUDE AI</span>
+        </div>
+        <div class="sec-title">💬 ลูกค้าใหม่ทักมา — AI แนะนำตอบ</div>
+        <div class="sec-meta">Real-time · admin ดู 3 ตัวเลือก → copy → ส่ง</div>
+      </div>
+      <span class="pill" style="background:#F3EBFF;color:#6B3FA0">$15/เดือน · 4 ชม. dev</span>
+    </div>
+    <div class="hairline"></div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+      <div class="lg:col-span-1 conv-card">
+        <div class="text-xs font-semibold mb-2" style="color:var(--rg-deep)">🆕 ทักเมื่อ 12 วินาทีที่แล้ว</div>
+        <div><div class="msg-bubble-cust">สวัสดีค่ะ เห็นโพสต์โบท็อก ราคาเริ่มต้นเท่าไหร่คะ มีโปรไหม</div><div class="msg-meta">เพิ่งทักมา · จาก Facebook ad</div></div>
+        <div class="hairline"></div>
+        <div class="text-xs" style="color:var(--soft)"><b style="color:var(--rg-deep)">AI Insights:</b> ลูกค้าสนใจ "โบท็อก" + ถามราคา + ถามโปร = ลูกค้าระยะ Awareness/Consider</div>
+      </div>
+
+      <div class="lg:col-span-2 space-y-3">
+        <div class="reply-suggestion">
+          <span class="badge" style="background:#E8F5E9;color:#2E7D32">🏆 RECOMMENDED · WARM</span>
+          <div class="text-sm leading-relaxed mb-2" style="color:var(--rg-deepest)">
+            "สวัสดีค่า ขอบคุณที่สนใจนะคะ 🌟<br/>
+            โปรโบท็อก <b>เริ่มต้น 1,990 บาท</b> (โควต้า) จนถึงสิ้นเดือนค่ะ<br/>
+            พอดีอยากแนะนำให้เหมาะกับใบหน้าของคุณ — สะดวกบอกคุณกังวลตรงไหนเป็นพิเศษไหมคะ?"
+          </div>
+          <div class="text-xs" style="color:var(--soft)">→ สร้างความสนใจ + ขอข้อมูลก่อนแจ้งราคาเต็ม</div>
+        </div>
+        <div class="reply-suggestion">
+          <span class="badge" style="background:#FEF3F0;color:#C76A30">🎯 DIRECT</span>
+          <div class="text-sm leading-relaxed mb-2" style="color:var(--rg-deepest)">
+            "สวัสดีค่า โบท็อกเริ่มต้น 1,990 บาทค่ะ (เฉพาะหน้าผาก / หางตา)<br/>
+            ราคาเต็มจุดอื่น ๆ ส่ง catalog ให้เลยไหมคะ?"
+          </div>
+          <div class="text-xs" style="color:var(--soft)">→ ตรงไปตรงมา · เหมาะถ้าลูกค้าเร่งรีบ</div>
+        </div>
+        <div class="reply-suggestion">
+          <span class="badge" style="background:#EFE5FF;color:#6B3FA0">✨ PREMIUM</span>
+          <div class="text-sm leading-relaxed mb-2" style="color:var(--rg-deepest)">
+            "สวัสดีค่ะ เอเวอร์ลี่ใช้ <b>โบท็อก Allergan แท้ 100%</b> นะคะ<br/>
+            มี 3 แพ็คเกจ — Starter 1,990 / Premium 3,990 / Signature 5,990 ค่ะ<br/>
+            มีรีวิวลูกค้าหลังทำ 7 วัน อยากดูไหมคะ?"
+          </div>
+          <div class="text-xs" style="color:var(--soft)">→ เน้น brand premium · เหมาะลูกค้าที่ดูคุณภาพ</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════════════════ FEATURE 3E: Daily Coaching ════════════════════ -->
+  <section class="section">
+    <div class="flex items-start justify-between mb-2">
+      <div>
+        <div class="sec-eyebrow flex items-center gap-2">
+          <span>Daily AI Coaching</span>
+          <span class="pill pill-ai">🤖 CLAUDE AI</span>
+          <span class="pill" style="background:#06C755;color:white">📱 ส่ง LINE 23:59</span>
+        </div>
+        <div class="sec-title">📊 สรุปประจำวัน + คำแนะนำ admin</div>
+        <div class="sec-meta">ส่งอัตโนมัติทุกคืนใน LINE group "หลังบ้าน Everly"</div>
+      </div>
+      <span class="pill" style="background:#F3EBFF;color:#6B3FA0">$10/เดือน · 3 ชม. dev</span>
+    </div>
+    <div class="hairline"></div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-5 gap-5">
+      <div class="lg:col-span-3 coaching-card">
+        <div class="text-xs font-semibold uppercase tracking-wider mb-3" style="color:#A47218">🌙 รายงานวันที่ 18 พฤษภาคม 2026</div>
+        <div class="font-serif text-2xl mb-3" style="color:var(--rg-deepest)">วันนี้: 23 ทัก · 2 ได้เบอร์ (8.7%)</div>
+
+        <div class="text-sm leading-relaxed mb-4" style="color:var(--rg-deepest)">
+          📈 <b>วันนี้ทักเยอะกว่าค่าเฉลี่ย +35%</b> (จาก 17/วัน เฉลี่ย 7 วัน)<br/>
+          ⏱ <b>Avg first response: 8.2 นาที</b> (เป้า &lt; 5 นาที — เกินไป 60%)
+        </div>
+
+        <div class="hairline"></div>
+
+        <div class="text-xs font-semibold mb-2" style="color:#A47218">🎯 3 ข้อที่ admin ควรทำพรุ่งนี้:</div>
+        <div class="space-y-2 text-sm" style="color:var(--rg-deepest)">
+          <div>1️⃣ <b>ตอบเร็วขึ้น</b> — 12 เคสรอเกิน 5 นาที (สูญเสียลูกค้า ~3 คน)</div>
+          <div>2️⃣ <b>Follow-up 5 เคสที่ถามราคาแต่ไม่ตอบ:</b> [คลิกดู list]</div>
+          <div>3️⃣ <b>คำถาม "มีคอร์สรวมไหม"</b> ถาม 4 ครั้งวันนี้ → ทำ Quick Reply ตอบ "Combo Beauty 6,990"</div>
+        </div>
+
+        <div class="hairline"></div>
+
+        <div class="text-xs font-semibold mb-2" style="color:#A47218">⚠️ ที่ต้องระวัง:</div>
+        <div class="text-sm" style="color:var(--rg-deepest)">
+          • Admin "ภา" ตอบช้าเฉลี่ย 14 นาที (เพื่อนคนอื่น 5 นาที) — อาจต้องเพิ่มคน?<br/>
+          • 6 คนหายเพราะ "ราคา" → ทดลอง offer ผ่อน 0% สัปดาห์หน้า
+        </div>
+      </div>
+
+      <div class="lg:col-span-2 space-y-3">
+        <div class="card p-5 text-center">
+          <div class="text-xs uppercase tracking-wider" style="color:var(--soft)">เปรียบเทียบ 7 วันที่แล้ว</div>
+          <div class="grid grid-cols-2 gap-3 mt-3">
+            <div><div class="stat-num" style="color:#16A34A">+35%</div><div class="text-xs" style="color:var(--soft)">ทัก</div></div>
+            <div><div class="stat-num" style="color:var(--rose)">-12%</div><div class="text-xs" style="color:var(--soft)">conversion</div></div>
+          </div>
+        </div>
+        <div class="card p-5">
+          <div class="text-xs font-semibold mb-3" style="color:var(--rg-deep)">📱 Preview LINE message</div>
+          <div class="rounded-xl p-3" style="background:#E8F5E0; border:1px solid #06C755">
+            <div class="text-xs" style="color:#06A04A; font-weight:600">หลังบ้าน Everly · 23:59</div>
+            <div class="text-xs mt-2 leading-relaxed" style="color:#1B5E20; white-space:pre-line">🌙 รายงาน 18 พ.ค.
+• 23 ทัก · 2 ได้เบอร์ · 8.7%
+• ตอบช้าเฉลี่ย 8.2 นาที ⚠️
+
+🎯 พรุ่งนี้ลองทำ:
+1) ตอบใน 5 นาที (12 เคสเสีย)
+2) Follow-up 5 คนถามราคาแล้วเงียบ
+3) สร้าง Quick Reply "Combo 6,990"
+
+ดูรายละเอียด → everly-clinic.onrender.com</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ════════════════════ Summary + CTA ════════════════════ -->
+  <section class="section" style="background:linear-gradient(135deg, var(--cream) 0%, var(--ivory) 100%)">
+    <div class="font-serif text-3xl mb-3" style="color:var(--rg-deepest)">รวมต้นทุน + Timeline</div>
+    <div class="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-5">
+      <div class="card p-5 text-center">
+        <div class="text-xs uppercase tracking-wider" style="color:var(--soft)">3A · Silence Point</div>
+        <div class="font-serif text-2xl mt-1" style="color:#16A34A">FREE</div>
+        <div class="text-xs mt-1" style="color:var(--soft)">2 ชม. dev · ทำได้ทันที</div>
+      </div>
+      <div class="card p-5 text-center">
+        <div class="text-xs uppercase tracking-wider" style="color:var(--soft)">3C · AI Deep-Dive</div>
+        <div class="font-serif text-2xl mt-1" style="color:#6B3FA0">$30/เดือน</div>
+        <div class="text-xs mt-1" style="color:var(--soft)">6 ชม. dev · ใช้ Claude API</div>
+      </div>
+      <div class="card p-5 text-center">
+        <div class="text-xs uppercase tracking-wider" style="color:var(--soft)">3D · Reply Suggest</div>
+        <div class="font-serif text-2xl mt-1" style="color:#6B3FA0">$15/เดือน</div>
+        <div class="text-xs mt-1" style="color:var(--soft)">4 ชม. dev · real-time</div>
+      </div>
+      <div class="card p-5 text-center">
+        <div class="text-xs uppercase tracking-wider" style="color:var(--soft)">3E · Daily Coaching</div>
+        <div class="font-serif text-2xl mt-1" style="color:#6B3FA0">$10/เดือน</div>
+        <div class="text-xs mt-1" style="color:var(--soft)">3 ชม. dev · auto LINE</div>
+      </div>
+    </div>
+    <div class="card p-5" style="background:#fff">
+      <div class="text-xs font-semibold mb-2 uppercase tracking-wider" style="color:var(--rg-deep)">💰 รวมทั้งหมด</div>
+      <div class="grid grid-cols-2 gap-5">
+        <div>
+          <div class="font-serif text-3xl" style="color:var(--rg-deepest)">~$55/เดือน</div>
+          <div class="text-xs" style="color:var(--soft)">≈ ฿2,000/เดือน · Claude API + Render</div>
+        </div>
+        <div>
+          <div class="font-serif text-3xl" style="color:var(--rg-deepest)">15 ชม. dev</div>
+          <div class="text-xs" style="color:var(--soft)">≈ 2-3 วันทำงาน · ทำเป็นเฟส</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="text-center mt-10 mb-5" style="color:var(--soft)">
+    <div class="text-xs">Mockup · ยังไม่ใช่ของจริง · เก็บไว้ที่ <code>mockup/admin-ai-phase3.html</code></div>
+  </div>
+
+</div>
+
+</body>
+</html>

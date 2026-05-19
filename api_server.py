@@ -1580,6 +1580,89 @@ def admin_silence_trigger(
     }
 
 
+# ── Live stats — Tier 2 polling endpoint for the header ticker ──
+# Aggregates the most important "right-now" numbers into ONE call so the dashboard
+# can poll every 30 seconds without hammering the FB API with multiple requests.
+# Heavily cached (15 seconds) because three of the four numbers come from a
+# corpus build that's already cached.
+_LIVE_STATS_CACHE: dict = {}
+_LIVE_STATS_TTL = 20  # short cache — header should feel "live"
+
+
+@app.get("/api/everly/admin/live-stats")
+def admin_live_stats():
+    """Real-time aggregate for the live ticker bar:
+      - today_inbox_count: ลูกค้าใหม่ที่ทักวันนี้ (since midnight BKK)
+      - waiting_count: ลูกค้าที่รอ admin ตอบเกิน 5 นาที
+      - longest_wait_min: คนรอนานสุดในนาที
+      - inbox_queue: list of {sender_hint, wait_min, last_text} (top 5 longest waits)
+      - last_message_ts: timestamp ของข้อความล่าสุดที่เข้ามา
+      - server_now: unix ts ของ server (เพื่อ sync client-side clock)
+    """
+    now_ts = int(time.time())
+    cached = _LIVE_STATS_CACHE.get("v1")
+    if cached and (now_ts - cached["_cached_at"]) < _LIVE_STATS_TTL:
+        out = {k: v for k, v in cached.items() if k != "_cached_at"}
+        out["cache_age_sec"] = now_ts - cached["_cached_at"]
+        out["cache_hit"] = True
+        return out
+
+    today = today_bkk()
+    s_dt = datetime.combine(today, datetime.min.time(), tzinfo=BANGKOK_TZ)
+    u_dt = datetime.combine(today, datetime.max.time(), tzinfo=BANGKOK_TZ)
+    s_ts = int(s_dt.timestamp())
+    u_ts = int(u_dt.timestamp())
+
+    corpus = _build_admin_message_corpus(s_ts, u_ts)
+    convs = corpus["conversations"]
+
+    # NEW customer conversations today (first message in range)
+    new_today = [c for c in convs
+                 if c.get("first_message_ts") and s_ts <= c["first_message_ts"] <= u_ts]
+
+    # Waiting queue: last message from customer AND >5 min ago (still waiting for admin)
+    queue = []
+    for c in convs:
+        if not c.get("last_msg_from_customer") or not c.get("last_msg_ts"):
+            continue
+        wait_sec = now_ts - int(c["last_msg_ts"])
+        if wait_sec < 300:  # less than 5 min — not "waiting" yet, ignore
+            continue
+        last_text = ""
+        for m in reversed(c.get("customer_messages", [])):
+            if m.get("text"):
+                last_text = m["text"][:80]
+                break
+        queue.append({
+            "wait_min": round(wait_sec / 60, 1),
+            "wait_sec": wait_sec,
+            "last_text": last_text,
+            "message_count": c.get("message_count", 0),
+            "conv_id": c.get("id", ""),
+        })
+    queue.sort(key=lambda x: -x["wait_sec"])
+
+    # Last message timestamp across all conversations (for "เพิ่งมีคนทักเมื่อ X นาทีที่แล้ว")
+    all_last_ts = [c.get("last_msg_ts") for c in convs if c.get("last_msg_ts")]
+    last_message_ts = max(all_last_ts) if all_last_ts else None
+    seconds_since_last = (now_ts - last_message_ts) if last_message_ts else None
+
+    payload = {
+        "today_inbox_count": len(new_today),
+        "waiting_count": len(queue),
+        "longest_wait_min": queue[0]["wait_min"] if queue else 0,
+        "inbox_queue": queue[:8],  # top 8 most overdue
+        "last_message_ts": last_message_ts,
+        "seconds_since_last_message": seconds_since_last,
+        "server_now": now_ts,
+        "data_source": "FB Pages Conversations API",
+        "cache_hit": False,
+        "cache_age_sec": 0,
+    }
+    _LIVE_STATS_CACHE["v1"] = {**payload, "_cached_at": now_ts}
+    return payload
+
+
 @app.get("/api/everly/admin/faq")
 def admin_faq(
     since: Optional[str] = Query(None),

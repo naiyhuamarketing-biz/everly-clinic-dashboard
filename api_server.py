@@ -1734,21 +1734,67 @@ def keepalive():
     """Lightweight ping that:
       1. Keeps Render free dyno warm (avoids 15-min sleep)
       2. Touches Meta API so the long-lived FB token auto-extends
-         (Meta extends tokens that are used at least every 24h within the 60-day window)
-      3. Returns immediately — does NOT send LINE
+      3. AUTO-TRIGGERS daily LINE if past 23:59 BKK and not yet sent today
+         — this guarantees LINE goes out within ~14 min of midnight,
+         using the existing every-14-min keepalive cron that runs reliably
+         (GitHub schedules with high frequency tend to land on time,
+         unlike once-a-day schedules which get queued and delayed by hours).
     """
     today = today_bkk()
     try:
-        # Touching Meta API keeps token warm
         records = _fetch_range(today, today)
-        ok = bool(records) or True  # even empty result counts as "API call succeeded"
     except Exception as e:
         return {"ok": False, "error": str(e)[:200]}
+
+    # Auto-LINE check: send today's report if past 23:59 BKK and not yet sent.
+    # Uses _default_report_date() logic — between 00:00–06:00 BKK we report
+    # yesterday's full-day data (matches the 23:59 cron's natural intent).
+    line_status = "not_triggered"
+    line_reason = ""
+    try:
+        now = now_bkk()
+        # Trigger window: 23:55 BKK → 06:00 BKK next day
+        # (so even if keepalive runs at 23:56 first, it'll send by 23:59 attempt)
+        hour = now.hour
+        minute = now.minute
+        within_send_window = (hour == 23 and minute >= 55) or (hour < 6)
+        if within_send_window:
+            target_date = _default_report_date()
+            if not _already_sent(target_date):
+                # Inline call — avoid HTTP round-trip
+                has_token = bool(os.getenv("LINE_CHANNEL_ACCESS_TOKEN"))
+                has_group = bool(os.getenv("LINE_GROUP_ID_EVERLY") or os.getenv("LINE_GROUP_ID"))
+                if has_token and has_group:
+                    try:
+                        text = _build_daily_text(target_date)
+                        from lib.notify import send_line_summary
+                        if send_line_summary(text):
+                            _mark_sent(target_date, text)
+                            line_status = "sent"
+                            line_reason = f"auto-triggered from keepalive · date={target_date.isoformat()}"
+                        else:
+                            line_status = "send_failed"
+                    except Exception as e:
+                        line_status = "build_failed"
+                        line_reason = str(e)[:100]
+                else:
+                    line_status = "line_not_configured"
+            else:
+                line_status = "already_sent_today"
+        else:
+            line_status = "outside_window"
+            line_reason = f"hour={hour} min={minute} · window: 23:55-06:00"
+    except Exception as e:
+        line_status = "error"
+        line_reason = str(e)[:100]
+
     return {
         "ok": True,
         "now_bkk": now_bkk().isoformat(),
         "cached_keys": len(_CACHE),
-        "message": "Render warm + FB token extended",
+        "line_auto_send": line_status,
+        "line_reason": line_reason,
+        "message": "Render warm + FB token extended + auto-LINE checked",
     }
 
 

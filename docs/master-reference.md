@@ -22,16 +22,17 @@
 | Dashboard เปิดได้ 24/7 | ✅ Render free tier |
 | Live Meta API (cache 10 นาที) | ✅ |
 | Auto refresh ทุกครั้ง user กด refresh | ✅ |
-| **ส่ง LINE 23:59 ทุกคืน** | ✅ GitHub Actions cron |
+| **ส่ง LINE 00:00 ทุกคืน** | ✅ GitHub Actions cron |
 | Auto-redeploy เมื่อ push code | ✅ |
 
 ---
 
-## ⏰ LINE 23:59 BKK auto-send
+## ⏰ LINE 00:00 BKK auto-send
 
 - **Workflow:** `.github/workflows/daily-line.yml`
-- **Schedule:** `59 16 * * *` (UTC = 23:59 Bangkok)
+- **Schedule:** `0 17 * * *` (UTC = 00:00 Bangkok)
 - **Endpoint:** `/api/everly/send-daily-line`
+- **Report date:** วันที่เพิ่งจบไป เช่น 21 พ.ค. 00:00 จะรายงาน 20 พ.ค. และสะสม 1-20 พ.ค.
 - **กลุ่มที่ส่ง:** เดียวกับ Glow (Glow Visage group)
 - **ทดสอบแล้ว:** ✅ `25279508679` workflow run = success
 - **Trigger manual:** GitHub Actions tab → "Run workflow"
@@ -42,14 +43,14 @@ EVERLY CLINIC — DAILY REPORT
 
 Report ประจำวัน (3 พฤษภาคม 2026)
 
-วันนี้ ใช้เงิน: ฿xxx.xx
+วันที่รายงาน ใช้เงิน: ฿xxx.xx
 คนทัก: x คน
 เฉลี่ยต่อคนทัก: ฿xx
 ยอดขาย: ฿xxx
 กำไร/ขาดทุน: ±฿xxx
 
 ============
-Report สะสมตั้งแต่ต้นเดือน – ปัจจุบัน
+Report สะสมตั้งแต่ต้นเดือน - ถึงวันที่รายงาน
 ภาพรวม ใช้เงินรวม: ...
 ```
 
@@ -78,7 +79,7 @@ LINE_GROUP_ID=Ca5ee252c90c5b73799813eed13f0ec6d
 |---|---|
 | Dashboard เปิดช้า ครั้งแรก ~30 วิ | Cold start (Render free tier) — รอ ปกติ |
 | ตัวเลขไม่อัปเดต | กดปุ่ม "↻ Refresh" ใน dashboard |
-| LINE ไม่ส่ง 23:59 | เช็ค https://github.com/naiyhuamarketing-biz/everly-clinic-dashboard/actions |
+| LINE ไม่ส่ง 00:00 | เช็ค https://github.com/naiyhuamarketing-biz/everly-clinic-dashboard/actions |
 | Token error | refresh token + อัปเดต Render env |
 | Render down | https://status.render.com |
 
@@ -97,7 +98,7 @@ curl -X POST https://everly-clinic.onrender.com/api/everly/send-daily-line
 ## 🚀 Roadmap (อยากทำต่อ)
 
 - [x] Deploy 24/7 ✅
-- [x] LINE 23:59 auto ✅
+- [x] LINE 00:00 auto ✅
 - [ ] ใส่โลโก้จริงแทน "e" monogram (save `assets/everly_logo.png`)
 - [ ] สร้าง LINE group เฉพาะ Everly (ตอนนี้ใช้กลุ่ม Glow ร่วม)
 - [ ] AI Insights — narrative สรุปเดือน

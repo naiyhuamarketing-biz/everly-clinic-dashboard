@@ -134,7 +134,7 @@ python verify.py --range 2026-04-01:2026-04-30
 
 ## หลังจาก setup เสร็จ — ทำอะไรต่อได้บ้าง
 
-1. **Auto-pull ทุกคืน 23:59** — `daily_report.py` จะดึง Meta API ตรงๆ ไม่ต้องผ่าน xlsx
+1. **Auto-pull ทุกคืน 00:00** — `daily_report.py` จะดึง Meta API ตรงๆ ไม่ต้องผ่าน xlsx
 2. **Dashboard live data** — เปลี่ยน `MOCK_MODE=false` ใน `.env` แล้วรีเฟรช → ดึงจาก Meta สด
 3. **Auto-detect ความผิดพลาดของทีม** — verify.py ถ้าเจอ diff > 15% ส่งแจ้ง LINE
 

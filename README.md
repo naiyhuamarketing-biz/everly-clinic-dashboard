@@ -1,7 +1,8 @@
 # 🌿 Everly Clinic · Daily Ads Report
 
 Live FastAPI dashboard ที่ดึงข้อมูล Meta Marketing API ของ Everly Clinic
-แสดงรายวัน + เปรียบเทียบรายเดือน + ส่ง LINE 23:59 อัตโนมัติทุกคืน
+แสดงรายวัน + เปรียบเทียบรายเดือน + ส่ง LINE 00:00 อัตโนมัติทุกคืน
+โดยรายงานเป็นข้อมูลของวันที่เพิ่งจบไป และยอดสะสมตั้งแต่วันที่ 1 ถึงวันที่รายงาน
 
 ---
 
@@ -26,9 +27,11 @@ Live FastAPI dashboard ที่ดึงข้อมูล Meta Marketing API �
 
 ---
 
-## 📲 LINE Auto-send (23:59 ทุกคืน)
+## 📲 LINE Auto-send (00:00 ทุกคืน)
 
-GitHub Actions cron ยิง endpoint `/api/everly/send-daily-line` ทุกวัน 16:59 UTC = 23:59 BKK
+GitHub Actions cron ยิง endpoint `/api/everly/send-daily-line` ทุกวัน 17:00 UTC = 00:00 BKK
+
+ตัวอย่าง: ถ้าวันนี้วันที่ 21 ระบบจะส่ง Report ของวันที่ 20 ทั้งวัน และยอดสะสมวันที่ 1-20
 
 ตอนนี้ส่งเข้า LINE group เดียวกับ Glow (ใช้ `LINE_GROUP_ID`)
 
@@ -84,7 +87,7 @@ cd ~/Desktop/Code/ads-report-everly
 | `lib/notify.py` | LINE push (`send_line_summary`) |
 | `render.yaml` | Render blueprint (web service) |
 | `Procfile` | Render start command |
-| `.github/workflows/daily-line.yml` | GitHub Actions cron 23:59 BKK |
+| `.github/workflows/daily-line.yml` | GitHub Actions cron 00:00 BKK |
 | `requirements.txt` | Python deps |
 | `runtime.txt` | python-3.11 (Render) |
 | `docs/` | Master reference, recovery guide, and Facebook token notes |

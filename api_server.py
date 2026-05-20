@@ -108,9 +108,8 @@ def _fetch_range(since: date, until: date):
 def _default_report_date() -> date:
     """Pick the report date safely for scheduled jobs.
 
-    Normal daily send runs at 23:59 BKK, so it should report today.
-    If a delayed/retry job runs shortly after midnight, it should still report
-    yesterday instead of accidentally sending an empty new-day report.
+    Normal daily send runs just after midnight BKK, so it reports yesterday:
+    the full day that just ended.
     """
     now = now_bkk()
     if now.hour < 1:
@@ -119,9 +118,9 @@ def _default_report_date() -> date:
 
 
 def _within_auto_send_window(now: Optional[datetime] = None) -> bool:
-    """Allow automatic LINE sends only around the intended nightly window."""
+    """Allow automatic LINE sends only around midnight Bangkok time."""
     now = now or now_bkk()
-    return (now.hour == 23 and now.minute >= 55) or (now.hour == 0 and now.minute <= 15)
+    return now.hour == 0 and now.minute <= 15
 
 
 def _read_sent_state() -> dict:
@@ -1740,8 +1739,8 @@ def keepalive():
     """Lightweight ping that:
       1. Keeps Render free dyno warm (avoids 15-min sleep)
       2. Touches Meta API so the long-lived FB token auto-extends
-      3. AUTO-TRIGGERS daily LINE in the 23:55-00:15 BKK window if not sent
-         — this gives LINE several chances to go out around midnight,
+      3. AUTO-TRIGGERS daily LINE in the 00:00-00:15 BKK window if not sent
+         — this gives LINE several chances to go out at midnight,
          using the existing every-14-min keepalive cron that runs reliably
          (GitHub schedules with high frequency tend to land on time,
          unlike once-a-day schedules which get queued and delayed by hours).
@@ -1752,16 +1751,14 @@ def keepalive():
     except Exception as e:
         return {"ok": False, "error": str(e)[:200]}
 
-    # Auto-LINE check: send today's report if past 23:59 BKK and not yet sent.
-    # Uses _default_report_date() logic — between 00:00–06:00 BKK we report
-    # yesterday's full-day data (matches the 23:59 cron's natural intent).
+    # Auto-LINE check: send the completed previous-day report at midnight BKK.
     line_status = "not_triggered"
     line_reason = ""
     try:
         now = now_bkk()
-        # Trigger window: 23:55 BKK → 00:15 BKK next day.
+        # Trigger window: 00:00 BKK → 00:15 BKK.
         # GitHub schedule delays beyond this should skip instead of sending
-        # a stale/early-morning report into LINE.
+        # an early-morning report into LINE.
         within_send_window = _within_auto_send_window(now)
         if within_send_window:
             target_date = _default_report_date()
@@ -1788,7 +1785,7 @@ def keepalive():
                 line_status = "already_sent_today"
         else:
             line_status = "outside_window"
-            line_reason = f"hour={now.hour} min={now.minute} · window: 23:55-00:15"
+            line_reason = f"hour={now.hour} min={now.minute} · window: 00:00-00:15"
     except Exception as e:
         line_status = "error"
         line_reason = str(e)[:100]
@@ -1882,11 +1879,11 @@ def _thai_date(d: date) -> str:
 
 def _thai_range(d1: date, d2: date) -> str:
     if d1.year == d2.year and d1.month == d2.month:
-        return f"{d1.day}–{d2.day} {THAI_MONTHS[d1.month - 1]} {d1.year}"
+        return f"{d1.day}-{d2.day} {THAI_MONTHS[d1.month - 1]} {d1.year}"
     if d1.year == d2.year:
-        return (f"{d1.day} {THAI_MONTHS[d1.month - 1]} – "
+        return (f"{d1.day} {THAI_MONTHS[d1.month - 1]} - "
                 f"{d2.day} {THAI_MONTHS[d2.month - 1]} {d1.year}")
-    return (f"{d1.day} {THAI_MONTHS[d1.month - 1]} {d1.year} – "
+    return (f"{d1.day} {THAI_MONTHS[d1.month - 1]} {d1.year} - "
             f"{d2.day} {THAI_MONTHS[d2.month - 1]} {d2.year}")
 
 
@@ -1900,7 +1897,6 @@ def _fmt_pl(profit: float) -> str:
 
 def _build_daily_text(target_d: date) -> str:
     """Build the doctor-friendly daily report text exactly like dashboard."""
-    today = today_bkk()
     month_start = date(target_d.year, target_d.month, 1)
 
     # Selected day totals
@@ -1932,14 +1928,14 @@ def _build_daily_text(target_d: date) -> str:
     L.append("")
     L.append(f"Report ประจำวัน ({_thai_date(target_d)})")
     L.append("")
-    L.append(f"วันนี้ ใช้เงิน: ฿{sel_spend:,.2f}")
+    L.append(f"วันที่รายงาน ใช้เงิน: ฿{sel_spend:,.2f}")
     L.append(f"คนทัก: {sel_inbox} คน")
     L.append(f"เฉลี่ยต่อคนทัก: ฿{sel_cpr:,}" if sel_inbox else "เฉลี่ยต่อคนทัก: —")
     L.append(f"ยอดขาย: ฿{round(sel_conv):,}")
     L.append(f"กำไร/ขาดทุน: {_fmt_pl(day_profit)}")
     L.append("")
     L.append("============")
-    L.append(f"Report สะสมตั้งแต่ต้นเดือน – ปัจจุบัน ({_thai_range(month_start, target_d)})")
+    L.append(f"Report สะสมตั้งแต่ต้นเดือน - ถึงวันที่รายงาน ({_thai_range(month_start, target_d)})")
     L.append("")
     L.append(f"ภาพรวม ใช้เงินรวม: ฿{round(mtd_spend):,}")
     L.append(f"เฉลี่ยต่อวัน: ฿{avg_daily:,}")
@@ -1960,7 +1956,7 @@ def send_daily_line(
     secret: Optional[str] = Query(None, description="Optional CRON_SECRET fallback for simple cron services."),
 ):
     """Build daily report and push to LINE.
-    Called by GitHub Actions at 23:59 BKK (16:59 UTC) every day.
+    Called by GitHub Actions at 00:00 BKK (17:00 UTC) every day.
     `target` defaults to today (BKK). Token-protected via X-Cron-Secret header
     if CRON_SECRET env var is set.
     """
@@ -1979,7 +1975,7 @@ def send_daily_line(
             "skipped": True,
             "reason": "outside_auto_send_window",
             "now_bkk": now.isoformat(),
-            "window": "23:55-00:15 BKK",
+            "window": "00:00-00:15 BKK",
         }
 
     d = date.fromisoformat(target) if target else _default_report_date()

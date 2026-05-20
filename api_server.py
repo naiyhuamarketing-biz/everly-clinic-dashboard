@@ -118,6 +118,12 @@ def _default_report_date() -> date:
     return now.date()
 
 
+def _within_auto_send_window(now: Optional[datetime] = None) -> bool:
+    """Allow automatic LINE sends only around the intended nightly window."""
+    now = now or now_bkk()
+    return (now.hour == 23 and now.minute >= 55) or (now.hour == 0 and now.minute <= 15)
+
+
 def _read_sent_state() -> dict:
     try:
         if SENT_STATE_FILE.exists():
@@ -1734,8 +1740,8 @@ def keepalive():
     """Lightweight ping that:
       1. Keeps Render free dyno warm (avoids 15-min sleep)
       2. Touches Meta API so the long-lived FB token auto-extends
-      3. AUTO-TRIGGERS daily LINE if past 23:59 BKK and not yet sent today
-         — this guarantees LINE goes out within ~14 min of midnight,
+      3. AUTO-TRIGGERS daily LINE in the 23:55-00:15 BKK window if not sent
+         — this gives LINE several chances to go out around midnight,
          using the existing every-14-min keepalive cron that runs reliably
          (GitHub schedules with high frequency tend to land on time,
          unlike once-a-day schedules which get queued and delayed by hours).
@@ -1753,11 +1759,10 @@ def keepalive():
     line_reason = ""
     try:
         now = now_bkk()
-        # Trigger window: 23:55 BKK → 06:00 BKK next day
-        # (so even if keepalive runs at 23:56 first, it'll send by 23:59 attempt)
-        hour = now.hour
-        minute = now.minute
-        within_send_window = (hour == 23 and minute >= 55) or (hour < 6)
+        # Trigger window: 23:55 BKK → 00:15 BKK next day.
+        # GitHub schedule delays beyond this should skip instead of sending
+        # a stale/early-morning report into LINE.
+        within_send_window = _within_auto_send_window(now)
         if within_send_window:
             target_date = _default_report_date()
             if not _already_sent(target_date):
@@ -1783,7 +1788,7 @@ def keepalive():
                 line_status = "already_sent_today"
         else:
             line_status = "outside_window"
-            line_reason = f"hour={hour} min={minute} · window: 23:55-06:00"
+            line_reason = f"hour={now.hour} min={now.minute} · window: 23:55-00:15"
     except Exception as e:
         line_status = "error"
         line_reason = str(e)[:100]
@@ -1966,6 +1971,16 @@ def send_daily_line(
         supplied_secret = request.headers.get("x-cron-secret") or secret or ""
         if supplied_secret != expected_secret:
             raise HTTPException(401, "Invalid cron secret")
+
+    if not force and target is None and not _within_auto_send_window():
+        now = now_bkk()
+        return {
+            "ok": True,
+            "skipped": True,
+            "reason": "outside_auto_send_window",
+            "now_bkk": now.isoformat(),
+            "window": "23:55-00:15 BKK",
+        }
 
     d = date.fromisoformat(target) if target else _default_report_date()
 

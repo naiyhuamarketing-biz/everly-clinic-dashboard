@@ -11,10 +11,10 @@ on:
   schedule:
     # Normal interval: every 14 min keeps Render warm + FB token extended
     - cron: '*/14 * * * *'
-    # Tight cron 17:00-17:15 UTC = 00:00-00:15 BKK — gives the once-a-day
+    # Tight cron 17:00-17:59 UTC = 00:00-00:59 BKK — gives the once-a-day
     # LINE auto-send multiple chances to land at midnight. First successful
     # one wins (per-date idempotency guard skips the rest).
-    - cron: '0-15 17 * * *'
+    - cron: '0-59 17 * * *'
   workflow_dispatch:
 
 # Cancel pending pings if a new one starts (avoid pile-up)

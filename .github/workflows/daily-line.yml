@@ -1,7 +1,7 @@
 name: Daily LINE notification
 
 # Fires every day at 00:00 Bangkok time (17:00 UTC).
-# Backup retry fires at 00:09 Bangkok time (17:09 UTC). The API has a
+# Backup retries fire during the first hour after midnight. The API has a
 # per-date idempotency guard, so the backup run skips if the main run already
 # sent the report.
 # Free on GitHub Actions for public repos — runs on GitHub's servers,
@@ -15,6 +15,8 @@ on:
   schedule:
     - cron: '0 17 * * *'   # 00:00 BKK
     - cron: '9 17 * * *'   # 00:09 BKK backup retry for previous day
+    - cron: '29 17 * * *'  # 00:29 BKK backup retry
+    - cron: '49 17 * * *'  # 00:49 BKK backup retry
   workflow_dispatch:  # manual trigger from GitHub UI
 
 concurrency:
@@ -45,9 +47,13 @@ jobs:
             RESP=$(curl -s --max-time 60 -X POST "$URL" -H "Content-Type: application/json")
             echo "$RESP" | head -c 500
             echo
-            if echo "$RESP" | grep -q '"ok":true'; then
+            if echo "$RESP" | grep -q '"ok":true' && ! echo "$RESP" | grep -q '"skipped":true'; then
               echo "  ✓ sent"
               exit 0
+            fi
+            if echo "$RESP" | grep -q '"outside_auto_send_window"'; then
+              echo "  ✗ outside midnight send window"
+              exit 1
             fi
             sleep $((i * 15))
           done

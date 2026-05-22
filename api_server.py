@@ -120,7 +120,7 @@ def _default_report_date() -> date:
 def _within_auto_send_window(now: Optional[datetime] = None) -> bool:
     """Allow automatic LINE sends only around midnight Bangkok time."""
     now = now or now_bkk()
-    return now.hour == 0 and now.minute <= 15
+    return now.hour == 0
 
 
 def _read_sent_state() -> dict:
@@ -1739,7 +1739,7 @@ def keepalive():
     """Lightweight ping that:
       1. Keeps Render free dyno warm (avoids 15-min sleep)
       2. Touches Meta API so the long-lived FB token auto-extends
-      3. AUTO-TRIGGERS daily LINE in the 00:00-00:15 BKK window if not sent
+      3. AUTO-TRIGGERS daily LINE in the 00:00-00:59 BKK window if not sent
          — this gives LINE several chances to go out at midnight,
          using the existing every-14-min keepalive cron that runs reliably
          (GitHub schedules with high frequency tend to land on time,
@@ -1756,7 +1756,7 @@ def keepalive():
     line_reason = ""
     try:
         now = now_bkk()
-        # Trigger window: 00:00 BKK → 00:15 BKK.
+        # Trigger window: 00:00 BKK → 00:59 BKK.
         # GitHub schedule delays beyond this should skip instead of sending
         # an early-morning report into LINE.
         within_send_window = _within_auto_send_window(now)
@@ -1785,7 +1785,7 @@ def keepalive():
                 line_status = "already_sent_today"
         else:
             line_status = "outside_window"
-            line_reason = f"hour={now.hour} min={now.minute} · window: 00:00-00:15"
+            line_reason = f"hour={now.hour} min={now.minute} · window: 00:00-00:59"
     except Exception as e:
         line_status = "error"
         line_reason = str(e)[:100]
@@ -1853,19 +1853,19 @@ def line_status():
 
 @app.post("/api/line/send")
 def line_send(payload: dict = Body(...)):
-    """Push a text message to the Everly LINE group."""
-    text = (payload.get("text") or "").strip()
+    """Push dashboard-provided report text to the Everly LINE group."""
+    text = str(payload.get("text") or "").strip()
     if not text:
-        raise HTTPException(400, "text is required")
+        raise HTTPException(400, "text required")
     has_token = bool(os.getenv("LINE_CHANNEL_ACCESS_TOKEN"))
     has_group = bool(os.getenv("LINE_GROUP_ID_EVERLY") or os.getenv("LINE_GROUP_ID"))
     if not (has_token and has_group):
-        raise HTTPException(503, "LINE not configured")
+        raise HTTPException(503, "LINE not configured (set LINE_CHANNEL_ACCESS_TOKEN + LINE_GROUP_ID_EVERLY)")
 
     from lib.notify import send_line_summary
     ok = send_line_summary(text)
     if not ok:
-        raise HTTPException(502, "LINE push failed")
+        raise HTTPException(502, "LINE push failed (check server logs)")
     return {"ok": True, "sent_at": now_bkk().isoformat()}
 
 
@@ -1975,7 +1975,7 @@ def send_daily_line(
             "skipped": True,
             "reason": "outside_auto_send_window",
             "now_bkk": now.isoformat(),
-            "window": "00:00-00:15 BKK",
+            "window": "00:00-00:59 BKK",
         }
 
     d = date.fromisoformat(target) if target else _default_report_date()

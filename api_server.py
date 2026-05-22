@@ -12,6 +12,7 @@ import json
 import time
 import re
 import random
+import threading
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
@@ -47,6 +48,7 @@ DASHBOARD_FILE = ROOT / "dashboard.html"
 ASSETS_DIR = ROOT / "assets"
 SENT_STATE_FILE = Path(os.getenv("SENT_STATE_FILE", "/tmp/everly-line-sent.json"))
 SUMMARY_SNAPSHOT_DIR = Path(os.getenv("SUMMARY_SNAPSHOT_DIR", "/tmp/everly-summary-snapshots"))
+SEND_DAILY_LINE_LOCK = threading.Lock()
 
 # Mount /assets so brand logos (assets/logos/everly.png etc.) are served
 # directly by FastAPI — used by <img src="/assets/logos/..."> in dashboard.html
@@ -1900,27 +1902,28 @@ def keepalive():
         within_send_window = _within_auto_send_window(now)
         if within_send_window:
             target_date = _default_report_date()
-            if not _already_sent(target_date):
-                # Inline call — avoid HTTP round-trip
-                has_token = bool(os.getenv("LINE_CHANNEL_ACCESS_TOKEN"))
-                has_group = bool(os.getenv("LINE_GROUP_ID_EVERLY") or os.getenv("LINE_GROUP_ID"))
-                if has_token and has_group:
-                    try:
-                        text = _build_daily_text(target_date)
-                        from lib.notify import send_line_summary
-                        if send_line_summary(text):
-                            _mark_sent(target_date, text)
-                            line_status = "sent"
-                            line_reason = f"auto-triggered from keepalive · date={target_date.isoformat()}"
-                        else:
-                            line_status = "send_failed"
-                    except Exception as e:
-                        line_status = "build_failed"
-                        line_reason = str(e)[:100]
+            with SEND_DAILY_LINE_LOCK:
+                if not _already_sent(target_date):
+                    # Inline call — avoid HTTP round-trip
+                    has_token = bool(os.getenv("LINE_CHANNEL_ACCESS_TOKEN"))
+                    has_group = bool(os.getenv("LINE_GROUP_ID_EVERLY") or os.getenv("LINE_GROUP_ID"))
+                    if has_token and has_group:
+                        try:
+                            text = _build_daily_text(target_date)
+                            from lib.notify import send_line_summary
+                            if send_line_summary(text):
+                                _mark_sent(target_date, text)
+                                line_status = "sent"
+                                line_reason = f"auto-triggered from keepalive · date={target_date.isoformat()}"
+                            else:
+                                line_status = "send_failed"
+                        except Exception as e:
+                            line_status = "build_failed"
+                            line_reason = str(e)[:100]
+                    else:
+                        line_status = "line_not_configured"
                 else:
-                    line_status = "line_not_configured"
-            else:
-                line_status = "already_sent_today"
+                    line_status = "already_sent_today"
         else:
             line_status = "outside_window"
             line_reason = f"hour={now.hour} min={now.minute} · window: 00:00-00:59"
@@ -2118,39 +2121,40 @@ def send_daily_line(
 
     d = date.fromisoformat(target) if target else _default_report_date()
 
-    existing = _already_sent(d)
-    if existing and not force:
+    with SEND_DAILY_LINE_LOCK:
+        existing = _already_sent(d)
+        if existing and not force:
+            return {
+                "ok": True,
+                "skipped": True,
+                "reason": "already_sent",
+                "date": d.isoformat(),
+                "first_sent_at": existing.get("sent_at"),
+                "preview": existing.get("preview", ""),
+            }
+
+        has_token = bool(os.getenv("LINE_CHANNEL_ACCESS_TOKEN"))
+        has_group = bool(os.getenv("LINE_GROUP_ID_EVERLY") or os.getenv("LINE_GROUP_ID"))
+        if not (has_token and has_group):
+            raise HTTPException(503, "LINE not configured (set LINE_CHANNEL_ACCESS_TOKEN + LINE_GROUP_ID_EVERLY)")
+
+        try:
+            text = _build_daily_text(d)
+        except Exception as e:
+            raise HTTPException(502, f"Failed to build report: {e}")
+
+        from lib.notify import send_line_summary
+        ok = send_line_summary(text)
+        if not ok:
+            raise HTTPException(502, "LINE push failed (check server logs)")
+        _mark_sent(d, text)
         return {
             "ok": True,
-            "skipped": True,
-            "reason": "already_sent",
+            "skipped": False,
             "date": d.isoformat(),
-            "first_sent_at": existing.get("sent_at"),
-            "preview": existing.get("preview", ""),
+            "sent_at": now_bkk().isoformat(),
+            "preview": text[:200] + ("..." if len(text) > 200 else ""),
         }
-
-    has_token = bool(os.getenv("LINE_CHANNEL_ACCESS_TOKEN"))
-    has_group = bool(os.getenv("LINE_GROUP_ID_EVERLY") or os.getenv("LINE_GROUP_ID"))
-    if not (has_token and has_group):
-        raise HTTPException(503, "LINE not configured (set LINE_CHANNEL_ACCESS_TOKEN + LINE_GROUP_ID_EVERLY)")
-
-    try:
-        text = _build_daily_text(d)
-    except Exception as e:
-        raise HTTPException(502, f"Failed to build report: {e}")
-
-    from lib.notify import send_line_summary
-    ok = send_line_summary(text)
-    if not ok:
-        raise HTTPException(502, "LINE push failed (check server logs)")
-    _mark_sent(d, text)
-    return {
-        "ok": True,
-        "skipped": False,
-        "date": d.isoformat(),
-        "sent_at": now_bkk().isoformat(),
-        "preview": text[:200] + ("..." if len(text) > 200 else ""),
-    }
 
 
 @app.get("/api/everly/daily-text")

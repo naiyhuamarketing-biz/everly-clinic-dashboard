@@ -379,11 +379,18 @@ def everly_summary(
     return response
 
 
+def _resolve_target_date(target: Optional[str], date_value: Optional[str], default: date) -> date:
+    return date.fromisoformat(target or date_value) if (target or date_value) else default
+
+
 @app.get("/api/everly/day")
-def everly_day(target: Optional[str] = None):
-    """Single-day totals. `target` defaults to today."""
+def everly_day(
+    target: Optional[str] = Query(None),
+    date_value: Optional[str] = Query(None, alias="date"),
+):
+    """Single-day totals. `target`/`date` defaults to today."""
     today = today_bkk()
-    d = date.fromisoformat(target) if target else today
+    d = _resolve_target_date(target, date_value, today)
     try:
         records = _fetch_range(d, d)
     except Exception as e:
@@ -394,9 +401,12 @@ def everly_day(target: Optional[str] = None):
 
 
 @app.get("/api/everly/top-ads")
-def everly_top_ads(target: Optional[str] = None):
+def everly_top_ads(
+    target: Optional[str] = Query(None),
+    date_value: Optional[str] = Query(None, alias="date"),
+):
     """Top 3 ads by spend for a given day (defaults to yesterday)."""
-    d = date.fromisoformat(target) if target else (today_bkk() - timedelta(days=1))
+    d = _resolve_target_date(target, date_value, today_bkk() - timedelta(days=1))
     try:
         rows = _cached(
             f"top3:{d.isoformat()}:{signature()}",
@@ -404,7 +414,11 @@ def everly_top_ads(target: Optional[str] = None):
         )
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Meta API error: {e}")
-    return {"date": d.isoformat(), "ads": to_dict_list(rows)}
+    response = {"date": d.isoformat(), "ads": to_dict_list(rows)}
+    if _mock_data_enabled():
+        response["mock"] = True
+        response["warning"] = "MOCK_MODE/no FB_ACCESS_TOKEN — showing deterministic local mock data"
+    return response
 
 
 @app.get("/api/everly/top-ads-range")
@@ -499,17 +513,17 @@ def everly_top_ads_range(
 
 
 @app.get("/api/everly/report")
-def everly_report(target: Optional[str] = None):
+def everly_report(
+    target: Optional[str] = Query(None),
+    date_value: Optional[str] = Query(None, alias="date"),
+):
     """Pre-formatted daily report text + structured data.
     Defaults to **yesterday** (today is usually incomplete).
     """
-    d = date.fromisoformat(target) if target else (today_bkk() - timedelta(days=1))
+    d = _resolve_target_date(target, date_value, today_bkk() - timedelta(days=1))
 
     try:
-        day = _cached(
-            f"day:{d.isoformat()}:{signature()}",
-            lambda: fetch_daily(ACCOUNT_ID, d, d),
-        )
+        day = _fetch_range(d, d)
         ads = _cached(
             f"top3:{d.isoformat()}:{signature()}",
             lambda: fetch_top3_ads(ACCOUNT_ID, d, "Inbox"),
@@ -551,7 +565,7 @@ def everly_report(target: Optional[str] = None):
 
     text = "\n".join(lines)
 
-    return {
+    response = {
         "date": d.isoformat(),
         "text": text,
         "totals": {
@@ -576,6 +590,10 @@ def everly_report(target: Optional[str] = None):
         ],
         "fetched_at": now_bkk().isoformat(),
     }
+    if _mock_data_enabled():
+        response["mock"] = True
+        response["warning"] = "MOCK_MODE/no FB_ACCESS_TOKEN — showing deterministic local mock data"
+    return response
 
 
 @app.get("/api/everly/cache/clear")

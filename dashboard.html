@@ -936,7 +936,7 @@ async function checkApiHealth() {
   try {
     const res = await fetch(API_BASE + '/api/health', { cache:'no-store' });
     if (!res.ok) return false;
-    const j = await res.json(); return j.ok && (j.has_token || j.mock);
+    const j = await res.json(); return j.ok && (j.has_token || j.mock || j.mock_data);
   } catch { return false; }
 }
 async function apiGet(path) {
@@ -996,7 +996,7 @@ async function fetchOverview() {
     periodEl.textContent = `${fmtThai(j.since)} → ${fmtThai(j.until)} · ${j.n_days} วัน`;
     const ft = new Date(j.fetched_at);
     updatedEl.textContent = ft.toLocaleString('th-TH',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) + ' น.';
-    meta.textContent = 'ดึงสดจาก Meta Marketing API · cache 10 นาที';
+    meta.textContent = j.mock ? 'ข้อมูลจำลองสำหรับ local · ยังไม่ได้ตั้งค่า Meta token' : 'ดึงสดจาก Meta Marketing API · cache 10 นาที';
     setLive('ov', true); _overviewLoaded = true;
     renderSpendChart(j.days);
     toast('↻ Overview refreshed', 'save');
@@ -1410,7 +1410,9 @@ async function fetchReport() {
     const fmtThai = (iso) => new Date(iso).toLocaleDateString('th-TH',{day:'numeric',month:'short'});
     periodEl.textContent = isOneDay ? `${fmtThai(since)}` : `${fmtThai(since)} → ${fmtThai(until)}`;
     document.getElementById('rp-time').textContent = `อัพเดท ${new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'})} น.`;
-    document.getElementById('rp-meta').textContent = `ดึงสดจาก Meta · กรอบสีชมพูแก้ไขได้ · cache 10 นาที`;
+    document.getElementById('rp-meta').textContent = (mtdSummary.mock || selSummary.mock)
+      ? `ข้อมูลจำลองสำหรับ local · กรอบสีชมพูแก้ไขได้`
+      : `ดึงสดจาก Meta · กรอบสีชมพูแก้ไขได้ · cache 10 นาที`;
     toast('↻ Report refreshed', 'save');
   } catch (e) {
     setLive('rp', false);

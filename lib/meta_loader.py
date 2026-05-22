@@ -13,7 +13,10 @@ load_dotenv()
 
 
 def _secret(key: str, default: str = "") -> str:
-    """Read from Streamlit secrets first (cloud), then env vars (local)."""
+    """Read env vars first, then Streamlit secrets when running Streamlit."""
+    env_value = os.getenv(key)
+    if env_value:
+        return env_value
     try:
         import streamlit as st
         if hasattr(st, "secrets") and key in st.secrets:

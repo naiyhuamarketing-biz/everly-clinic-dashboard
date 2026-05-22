@@ -47,13 +47,17 @@ jobs:
             RESP=$(curl -s --max-time 60 -X POST "$URL" -H "Content-Type: application/json")
             echo "$RESP" | head -c 500
             echo
-            if echo "$RESP" | grep -q '"ok":true' && ! echo "$RESP" | grep -q '"skipped":true'; then
-              echo "  ✓ sent"
-              exit 0
-            fi
             if echo "$RESP" | grep -q '"outside_auto_send_window"'; then
               echo "  ✗ outside midnight send window"
               exit 1
+            fi
+            if echo "$RESP" | grep -q '"ok":true' && echo "$RESP" | grep -q '"reason":"already_sent"'; then
+              echo "  ✓ already sent by an earlier cron run"
+              exit 0
+            fi
+            if echo "$RESP" | grep -q '"ok":true' && ! echo "$RESP" | grep -q '"skipped":true'; then
+              echo "  ✓ sent"
+              exit 0
             fi
             sleep $((i * 15))
           done

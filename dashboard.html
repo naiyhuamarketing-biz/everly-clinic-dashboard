@@ -954,10 +954,22 @@ function apiErrorText(error) {
   }
   return `⚠️ เชื่อม API ไม่ได้ — ${message}`;
 }
-function setLive(prefix, on) {
+function setLive(prefix, state) {
+  const mode = state === true ? 'live' : (state || 'off');
   const onEl = document.getElementById(prefix+'-live-on'); const offEl = document.getElementById(prefix+'-live-off');
-  if (onEl) onEl.style.display = on ? '' : 'none';
-  if (offEl) offEl.style.display = on ? 'none' : '';
+  if (onEl) {
+    const isOn = mode === 'live' || mode === 'mock';
+    const isMock = mode === 'mock';
+    onEl.style.display = isOn ? '' : 'none';
+    if (isOn) {
+      const dot = isMock ? '#F59E0B' : '#16A34A';
+      const glow = isMock ? 'rgba(245,158,11,.18)' : 'rgba(22,163,74,.18)';
+      onEl.style.background = isMock ? '#FFF7ED' : '#ECFDF5';
+      onEl.style.color = isMock ? '#B45309' : '#16A34A';
+      onEl.innerHTML = `<span style="width:6px; height:6px; border-radius:50%; background:${dot}; display:inline-block; box-shadow:0 0 0 3px ${glow}; animation:pulse 1.4s infinite"></span> ${isMock ? 'LOCAL MOCK' : 'LIVE FROM META'}`;
+    }
+  }
+  if (offEl) offEl.style.display = mode === 'live' || mode === 'mock' ? 'none' : '';
 }
 
 // ============= SECTION 01 — OVERVIEW =============
@@ -997,7 +1009,7 @@ async function fetchOverview() {
     const ft = new Date(j.fetched_at);
     updatedEl.textContent = ft.toLocaleString('th-TH',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) + ' น.';
     meta.textContent = j.mock ? 'ข้อมูลจำลองสำหรับ local · ยังไม่ได้ตั้งค่า Meta token' : 'ดึงสดจาก Meta Marketing API · cache 10 นาที';
-    setLive('ov', true); _overviewLoaded = true;
+    setLive('ov', j.mock ? 'mock' : 'live'); _overviewLoaded = true;
     renderSpendChart(j.days);
     toast('↻ Overview refreshed', 'save');
   } catch (e) {
@@ -1035,7 +1047,7 @@ async function fetchDailyRange() {
       apiGet(`/api/everly/summary?since=${since}&until=${until}`),
       apiGet(`/api/everly/top-ads-range?since=${since}&until=${until}&limit=10`),
     ]);
-    setLive('dy', true);
+    setLive('dy', (summary.mock || top.mock) ? 'mock' : 'live');
     renderDailyRange(since, until, summary.totals, summary.n_days, top.ads || []);
   } catch (e) {
     setLive('dy', false);
@@ -1109,7 +1121,7 @@ async function fetchTopRange(updateInputs=false) {
       apiGet(`/api/everly/summary?since=${since}&until=${until}`),
       apiGet(`/api/everly/top-ads-range?since=${since}&until=${until}&limit=10`),
     ]);
-    setLive('tp', true);
+    setLive('tp', (summary.mock || top.mock) ? 'mock' : 'live');
     renderTopRange(since, until, summary.totals, top.ads || []);
   } catch (e) {
     setLive('tp', false);
@@ -1196,7 +1208,7 @@ function deltaHTML(curr, prev, invert=false) {
 async function fetchTrend() {
   try {
     const j = await apiGet('/api/everly/summary');
-    setLive('tr', true);
+    setLive('tr', j.mock ? 'mock' : 'live');
     const months = aggregateByMonth(j.days);
     renderMonthCards(months);
     renderMonthChart(months);
@@ -1389,7 +1401,7 @@ async function fetchReport() {
       apiGet(`/api/everly/summary?since=${since}&until=${until}`),
     ];
     const [mtdSummary, selSummary] = await Promise.all(calls);
-    setLive('rp', true);
+    setLive('rp', (mtdSummary.mock || selSummary.mock) ? 'mock' : 'live');
 
     const mt = mtdSummary.totals;
     const st = selSummary.totals;

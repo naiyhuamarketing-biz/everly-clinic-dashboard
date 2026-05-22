@@ -4,6 +4,12 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Everly Clinic · Daily Ads Report</title>
+<script>
+  window.__pendingSectionToggles = window.__pendingSectionToggles || [];
+  window.onSectionToggle = function (name, details) {
+    window.__pendingSectionToggles.push([name, details]);
+  };
+</script>
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Italiana&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Prompt:wght@200;300;400;500;600;700&family=Noto+Serif+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -930,7 +936,7 @@ async function checkApiHealth() {
   try {
     const res = await fetch(API_BASE + '/api/health', { cache:'no-store' });
     if (!res.ok) return false;
-    const j = await res.json(); return j.ok && j.has_token;
+    const j = await res.json(); return j.ok && (j.has_token || j.mock);
   } catch { return false; }
 }
 async function apiGet(path) {
@@ -1450,7 +1456,7 @@ async function sendReport() {
 
 // ============= SECTION TOGGLE — auto-fetch on first open =============
 const _loaded = {};
-async function onSectionToggle(name, details) {
+async function handleSectionToggle(name, details) {
   if (!details.open) return;
   if (_loaded[name]) return;
   const ok = await checkApiHealth();
@@ -1465,10 +1471,15 @@ async function onSectionToggle(name, details) {
   else if (name==='trend') fetchTrend();
   else if (name==='report') fetchReport();
 }
+window.onSectionToggle = handleSectionToggle;
 
 async function refreshAllLive() {
   toast('↻ Refreshing all live data...');
-  await Promise.all([fetchOverview(), fetchDailyRange(), fetchTopRange(), fetchTrend(), fetchReport()]);
+  const tasks = [fetchOverview(), fetchTopRange(), fetchTrend(), fetchReport()];
+  if (typeof fetchDailyRange === 'function' && document.getElementById('sec-daily')) {
+    tasks.push(fetchDailyRange());
+  }
+  await Promise.all(tasks);
   toast('✓ All sections refreshed', 'save');
 }
 
@@ -1531,8 +1542,13 @@ function renderAll() {
   renderAll();
   setTimeout(()=> setSaving(false), 100);
 
+  const pendingSectionToggles = window.__pendingSectionToggles || [];
+  window.__pendingSectionToggles = [];
+  pendingSectionToggles.forEach(([name, details]) => handleSectionToggle(name, details));
+
   // Auto-trigger initial loads (Section 01 is open by default)
   setTimeout(async () => {
+    if (_loaded.overview) return;
     const ok = await checkApiHealth();
     if (ok) { _loaded.overview = true; fetchOverview(); }
     else setLive('ov', false);

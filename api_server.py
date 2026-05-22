@@ -11,6 +11,7 @@ import os
 import json
 import time
 import re
+import random
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
@@ -18,7 +19,7 @@ from typing import Optional
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Query, Body, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 ROOT = Path(__file__).parent
@@ -78,6 +79,114 @@ def today_bkk() -> date:
 
 
 # ── Helpers ─────────────────────────────────────────────────────────
+def _has_fb_token() -> bool:
+    return bool(os.getenv("FB_ACCESS_TOKEN"))
+
+
+def _mock_data_enabled() -> bool:
+    """Use deterministic local data when explicitly requested or unconfigured."""
+    mock_env = os.getenv("MOCK_MODE", "").strip().lower()
+    return mock_env == "true" or not _has_fb_token()
+
+
+def _iter_days(since: date, until: date):
+    n = (until - since).days
+    for i in range(max(n, 0) + 1):
+        yield since + timedelta(days=i)
+
+
+def _mock_daily_records(since: date, until: date) -> list[dict]:
+    campaigns = [
+        "Everly · Skin Booster",
+        "Everly · Botox Consultation",
+        "Everly · Filler Promotion",
+        "Everly · Review Creative",
+        "Everly · Retargeting",
+    ]
+    out = []
+    for d in _iter_days(since, until):
+        rng = random.Random(f"everly-local-mock:{d.isoformat()}")
+        spend = round(rng.uniform(950, 2800), 2)
+        result = rng.randint(8, 32)
+        reach = rng.randint(2500, 9000)
+        frequency = round(rng.uniform(1.08, 1.85), 2)
+        impression = int(reach * frequency)
+        conversion = round(spend * rng.uniform(4.8, 13.5), 2)
+        roas = conversion / spend if spend else 0
+        synthetic_ad = {
+            "campaign": campaigns[rng.randrange(len(campaigns))],
+            "status": "Mock",
+            "objective": "Inbox",
+            "budget": 0,
+            "impression": impression,
+            "reach": reach,
+            "frequency": frequency,
+            "cpm": round((spend / impression * 1000) if impression else 0, 2),
+            "ctr": round(rng.uniform(0.8, 3.5), 3),
+            "cpc": round(rng.uniform(12, 45), 2),
+            "link_clicks": rng.randint(20, 110),
+            "conversion": conversion,
+            "roas": round(roas, 2),
+            "result": result,
+            "cost_per_result": round((spend / result) if result else 0, 2),
+            "spent": spend,
+        }
+        out.append({
+            "date": d.isoformat(),
+            "month": d.strftime("%b"),
+            "day": d.day,
+            "ads": [synthetic_ad],
+        })
+    return out
+
+
+def _mock_top_ads_range(since: date, until: date, limit: int) -> dict:
+    ads: dict[str, dict] = {}
+    for record in _mock_daily_records(since, until):
+        day = _day_totals(record)
+        name = day.get("top_campaign") or "Everly · Mock Campaign"
+        row = ads.setdefault(name, {
+            "campaign": name,
+            "spent": 0,
+            "impression": 0,
+            "reach": 0,
+            "result": 0,
+            "conversion": 0,
+        })
+        row["spent"] += day["spent"]
+        row["impression"] += day["impression"]
+        row["reach"] += day["reach"]
+        row["result"] += day["result"]
+        row["conversion"] += day["conversion"]
+
+    rows = []
+    for row in ads.values():
+        spent = row["spent"]
+        result = row["result"]
+        impression = row["impression"]
+        rows.append({
+            "campaign": row["campaign"],
+            "spent": round(spent, 2),
+            "impression": impression,
+            "reach": row["reach"],
+            "cpm": round((spent / impression * 1000) if impression else 0, 2),
+            "result": result,
+            "cost_per_result": round((spent / result) if result else 0, 2),
+            "conversion": round(row["conversion"], 2),
+            "roas": round((row["conversion"] / spent) if spent else 0, 2),
+        })
+    rows.sort(key=lambda r: ((r["cost_per_result"] if r["result"] else 9e9), -r["spent"]))
+    return {
+        "since": since.isoformat(),
+        "until": until.isoformat(),
+        "n_ads": len(rows),
+        "ads": rows[:limit],
+        "fetched_at": now_bkk().isoformat(),
+        "mock": True,
+        "warning": "MOCK_MODE/no FB_ACCESS_TOKEN — showing deterministic local mock data",
+    }
+
+
 def _day_totals(record: dict) -> dict:
     """Sum the day's ads (account-level loader returns 1 synthetic ad/day)."""
     ads = record.get("ads", [])
@@ -101,6 +210,8 @@ def _day_totals(record: dict) -> dict:
 
 
 def _fetch_range(since: date, until: date):
+    if _mock_data_enabled():
+        return _mock_daily_records(since, until)
     key = f"range:{since.isoformat()}:{until.isoformat()}:{signature()}"
     return _cached(key, lambda: fetch_daily(ACCOUNT_ID, since, until))
 
@@ -191,10 +302,13 @@ def _write_summary_snapshot(since: date, until: date, data: dict) -> None:
 @app.get("/api/health")
 def health():
     has_token = bool(os.getenv("FB_ACCESS_TOKEN"))
+    mock = _mock_data_enabled()
     return {
         "ok": True,
         "account_id": ACCOUNT_ID,
         "has_token": has_token,
+        "mock": mock,
+        "mock_data": mock,
         "now_bkk": now_bkk().isoformat(),
         "cache_keys": list(_CACHE.keys()),
     }
@@ -257,7 +371,11 @@ def everly_summary(
         "days": days,
         "fetched_at": now_bkk().isoformat(),
     }
-    _write_summary_snapshot(s, u, response)
+    if _mock_data_enabled():
+        response["mock"] = True
+        response["warning"] = "MOCK_MODE/no FB_ACCESS_TOKEN — showing deterministic local mock data"
+    else:
+        _write_summary_snapshot(s, u, response)
     return response
 
 
@@ -299,6 +417,8 @@ def everly_top_ads_range(
     today = today_bkk()
     s = date.fromisoformat(since) if since else date(today.year, today.month, 1)
     u = date.fromisoformat(until) if until else today
+    if _mock_data_enabled():
+        return _mock_top_ads_range(s, u, limit)
 
     key = f"top-range:{s.isoformat()}:{u.isoformat()}:{signature()}"
 
@@ -2038,9 +2158,19 @@ def send_state():
 
 
 # ── Dashboard routes (HTML at same origin as API) ─────────────
+@app.head("/")
+def root_dashboard_head():
+    return Response(status_code=200, media_type="text/html")
+
+
 @app.get("/")
 def root_dashboard():
     return FileResponse(DASHBOARD_FILE)
+
+
+@app.head("/dashboard")
+def dashboard_alias_head():
+    return Response(status_code=200, media_type="text/html")
 
 
 @app.get("/dashboard")

@@ -935,8 +935,18 @@ async function checkApiHealth() {
 }
 async function apiGet(path) {
   const res = await fetch(API_BASE + path, { cache:'no-store' });
-  if (!res.ok) throw new Error('HTTP ' + res.status);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || ('HTTP ' + res.status));
+  }
   return res.json();
+}
+function apiErrorText(error) {
+  const message = error && error.message ? error.message : String(error || '');
+  if (message.includes('FB_ACCESS_TOKEN not set')) {
+    return '⚠️ ยังไม่ได้ตั้งค่า FB_ACCESS_TOKEN — หน้าเว็บเปิดได้ แต่ยังดึงข้อมูล Meta จริงไม่ได้';
+  }
+  return `⚠️ เชื่อม API ไม่ได้ — ${message}`;
 }
 function setLive(prefix, on) {
   const onEl = document.getElementById(prefix+'-live-on'); const offEl = document.getElementById(prefix+'-live-off');
@@ -986,7 +996,7 @@ async function fetchOverview() {
     toast('↻ Overview refreshed', 'save');
   } catch (e) {
     setLive('ov', false);
-    meta.innerHTML = `⚠️ เชื่อม API ไม่ได้ — เปิด terminal: <code style="background:var(--cream); padding:2px 6px; border-radius:4px">cd /Users/fadiion/Desktop/Code/ads-report && .venv/bin/python api_server.py</code>`;
+    meta.innerHTML = `${apiErrorText(e)}<br><code style="background:var(--cream); padding:2px 6px; border-radius:4px">cd /Users/fadiion/Desktop/Code/ads-report-everly && python3 api_server.py</code>`;
   }
 }
 let spendChart;
@@ -1023,7 +1033,7 @@ async function fetchDailyRange() {
     renderDailyRange(since, until, summary.totals, summary.n_days, top.ads || []);
   } catch (e) {
     setLive('dy', false);
-    document.getElementById('dy-content').innerHTML = '<div class="card p-8 text-center" style="color:var(--dusty)">⚠️ เชื่อม API ไม่ได้</div>';
+    document.getElementById('dy-content').innerHTML = `<div class="card p-8 text-center" style="color:var(--dusty)">${apiErrorText(e)}</div>`;
   }
 }
 function renderDailyRange(since, until, t, nDays, ads) {
@@ -1097,7 +1107,7 @@ async function fetchTopRange(updateInputs=false) {
     renderTopRange(since, until, summary.totals, top.ads || []);
   } catch (e) {
     setLive('tp', false);
-    document.getElementById('tp-content').innerHTML = '<div class="card p-8 text-center" style="color:var(--dusty)">⚠️ เชื่อม API ไม่ได้</div>';
+    document.getElementById('tp-content').innerHTML = `<div class="card p-8 text-center" style="color:var(--dusty)">${apiErrorText(e)}</div>`;
   }
 }
 function renderTopRange(since, until, totals, ads) {
@@ -1398,7 +1408,7 @@ async function fetchReport() {
     toast('↻ Report refreshed', 'save');
   } catch (e) {
     setLive('rp', false);
-    previewEl.textContent = '⚠️ เชื่อม API ไม่ได้';
+    previewEl.textContent = apiErrorText(e);
     document.getElementById('rp-period').textContent = 'OFFLINE';
   }
 }

@@ -34,3 +34,4 @@ Thumbs.db
 *.xlsx
 IMPORTANT.md
 .token_cache.json
+.vercel

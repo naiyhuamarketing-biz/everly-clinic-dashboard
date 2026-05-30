@@ -1877,20 +1877,11 @@ def admin_faq(
 @app.get("/api/everly/keepalive")
 def keepalive():
     """Lightweight ping that:
-      1. Keeps Render free dyno warm (avoids 15-min sleep)
-      2. Touches Meta API so the long-lived FB token auto-extends
-      3. AUTO-TRIGGERS daily LINE in the 00:00-00:59 BKK window if not sent
+      1. Confirms the Render service is awake
+      2. AUTO-TRIGGERS daily LINE in the 00:00-00:59 BKK window if not sent
          — this gives LINE several chances to go out at midnight,
-         using the existing every-14-min keepalive cron that runs reliably
-         (GitHub schedules with high frequency tend to land on time,
-         unlike once-a-day schedules which get queued and delayed by hours).
+         without touching Meta API on every ping.
     """
-    today = today_bkk()
-    try:
-        records = _fetch_range(today, today)
-    except Exception as e:
-        return {"ok": False, "error": str(e)[:200]}
-
     # Auto-LINE check: send the completed previous-day report at midnight BKK.
     line_status = "not_triggered"
     line_reason = ""
@@ -1937,7 +1928,7 @@ def keepalive():
         "cached_keys": len(_CACHE),
         "line_auto_send": line_status,
         "line_reason": line_reason,
-        "message": "Render warm + FB token extended + auto-LINE checked",
+        "message": "Render awake + auto-LINE checked",
     }
 
 

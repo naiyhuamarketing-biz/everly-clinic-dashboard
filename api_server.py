@@ -86,9 +86,19 @@ def _has_fb_token() -> bool:
 
 
 def _mock_data_enabled() -> bool:
-    """Use deterministic local data when explicitly requested or unconfigured."""
+    """Use deterministic data only for local development or explicit demos.
+
+    Public deployments must not silently show fake totals when Meta env vars are
+    missing; that makes report numbers look real while they are not.
+    """
     mock_env = os.getenv("MOCK_MODE", "").strip().lower()
-    return mock_env == "true" or not _has_fb_token()
+    if mock_env in {"true", "1", "yes"}:
+        return True
+    if mock_env in {"false", "0", "no"}:
+        return False
+    if os.getenv("VERCEL") or os.getenv("RENDER"):
+        return False
+    return not _has_fb_token()
 
 
 def _iter_days(since: date, until: date):

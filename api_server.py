@@ -1,4 +1,4 @@
-"""FastAPI bridge — expose Everly Clinic Meta data to the HTML dashboard.
+"""FastAPI bridge — expose เยียวยา Meta data to the HTML dashboard.
 
 Reuses lib/meta_loader (same source as dashboard.py / Streamlit Cloud) so the
 HTML dashboard reads the exact same numbers as Streamlit (when both running).
@@ -35,7 +35,7 @@ from lib.fb_ads import fetch_top3_ads, to_dict_list
 ACCOUNT_ID = os.getenv("FB_ACCOUNT_EVERLY", "1965556974211662")
 BANGKOK_TZ = timezone(timedelta(hours=7))
 
-app = FastAPI(title="Everly Clinic Data API", version="1.0")
+app = FastAPI(title="Yiaoya Data API", version="1.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -109,15 +109,15 @@ def _iter_days(since: date, until: date):
 
 def _mock_daily_records(since: date, until: date) -> list[dict]:
     campaigns = [
-        "Everly · Skin Booster",
-        "Everly · Botox Consultation",
-        "Everly · Filler Promotion",
-        "Everly · Review Creative",
-        "Everly · Retargeting",
+        "เยียวยา · กายภาพบำบัด",
+        "เยียวยา · ปรึกษานักกายภาพ",
+        "เยียวยา · โปรโมชั่นรักษา",
+        "เยียวยา · รีวิวเคสจริง",
+        "เยียวยา · Retargeting",
     ]
     out = []
     for d in _iter_days(since, until):
-        rng = random.Random(f"everly-local-mock:{d.isoformat()}")
+        rng = random.Random(f"yiaoya-local-mock:{d.isoformat()}")
         spend = round(rng.uniform(950, 2800), 2)
         result = rng.randint(8, 32)
         reach = rng.randint(2500, 9000)
@@ -156,7 +156,7 @@ def _mock_top_ads_range(since: date, until: date, limit: int) -> dict:
     ads: dict[str, dict] = {}
     for record in _mock_daily_records(since, until):
         day = _day_totals(record)
-        name = day.get("top_campaign") or "Everly · Mock Campaign"
+        name = day.get("top_campaign") or "เยียวยา · Mock Campaign"
         row = ads.setdefault(name, {
             "campaign": name,
             "spent": 0,
@@ -326,6 +326,7 @@ def health():
     }
 
 
+@app.get("/api/yiaoya/summary")
 @app.get("/api/everly/summary")
 def everly_summary(
     since: Optional[str] = Query(None, description="YYYY-MM-DD; defaults to month start"),
@@ -395,6 +396,7 @@ def _resolve_target_date(target: Optional[str], date_value: Optional[str], defau
     return date.fromisoformat(target or date_value) if (target or date_value) else default
 
 
+@app.get("/api/yiaoya/day")
 @app.get("/api/everly/day")
 def everly_day(
     target: Optional[str] = Query(None),
@@ -412,6 +414,7 @@ def everly_day(
     return _day_totals(records[0])
 
 
+@app.get("/api/yiaoya/top-ads")
 @app.get("/api/everly/top-ads")
 def everly_top_ads(
     target: Optional[str] = Query(None),
@@ -433,6 +436,7 @@ def everly_top_ads(
     return response
 
 
+@app.get("/api/yiaoya/top-ads-range")
 @app.get("/api/everly/top-ads-range")
 def everly_top_ads_range(
     since: Optional[str] = None,
@@ -524,6 +528,7 @@ def everly_top_ads_range(
     }
 
 
+@app.get("/api/yiaoya/report")
 @app.get("/api/everly/report")
 def everly_report(
     target: Optional[str] = Query(None),
@@ -558,7 +563,7 @@ def everly_report(
 
     medals = ["🥇", "🥈", "🥉"]
     lines = []
-    lines.append(f"🌿 Everly Clinic — Daily Report {d.strftime('%-d/%-m/%Y')}")
+    lines.append(f"🌿 เยียวยา — Daily Report {d.strftime('%-d/%-m/%Y')}")
     lines.append(
         f"💸 Spend: ฿{spend:,.2f} | 📨 Inbox: {result} ข้อความ | "
         f"฿/Inbox: ฿{cpr:,.0f}"
@@ -1995,7 +2000,7 @@ def line_status():
 
 @app.post("/api/line/send")
 def line_send(payload: dict = Body(...)):
-    """Push dashboard-provided report text to the Everly LINE group."""
+    """Push dashboard-provided report text to the Yiaoya LINE group."""
     text = str(payload.get("text") or "").strip()
     if not text:
         raise HTTPException(400, "text required")

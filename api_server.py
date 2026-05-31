@@ -32,7 +32,7 @@ sys.path.insert(0, str(ROOT))
 from lib.meta_loader import fetch_daily, signature
 from lib.fb_ads import fetch_top3_ads, to_dict_list
 
-ACCOUNT_ID = os.getenv("FB_ACCOUNT_EVERLY", "1965556974211662")
+ACCOUNT_ID = os.getenv("FB_ACCOUNT_YIAOYA") or os.getenv("FB_ACCOUNT_EVERLY", "")
 BANGKOK_TZ = timezone(timedelta(hours=7))
 
 app = FastAPI(title="Yiaoya Data API", version="1.0")
@@ -82,7 +82,7 @@ def today_bkk() -> date:
 
 # ── Helpers ─────────────────────────────────────────────────────────
 def _has_fb_token() -> bool:
-    return bool(os.getenv("FB_ACCESS_TOKEN"))
+    return bool(os.getenv("FB_ACCESS_TOKEN") and ACCOUNT_ID)
 
 
 def _mock_data_enabled() -> bool:

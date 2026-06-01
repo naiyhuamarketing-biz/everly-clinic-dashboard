@@ -816,8 +816,9 @@ def _top_ads_range_payload_for_client(client: str, since: Optional[str], until: 
             account = AdAccount(f"act_{account_id}")
             label = _account_label(account_id)
             for item in account.get_insights(fields=fields, params=params):
-                item["_account_label"] = label
-                insights.append(item)
+                row = dict(item)
+                row["_account_label"] = label
+                insights.append(row)
         return insights
 
     try:

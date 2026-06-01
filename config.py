@@ -29,7 +29,7 @@ CLIENTS = [
            os.getenv("SHEET_YIAOYA", ""),
            "Inbox", "#C9A961"),
     Client("tuba", "Tuba",
-           os.getenv("FB_ACCOUNT_TUBA", ""),
+           os.getenv("FB_ACCOUNT_TUBA", "1979003202592442"),
            os.getenv("SHEET_TUBA", ""),
            "Purchase", "#B8869C"),
     Client("beautier", "Beautier Clinic",

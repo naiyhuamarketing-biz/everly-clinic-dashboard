@@ -106,7 +106,7 @@ def _real_ads(account_id: str, d: date, objective: str) -> List[AdRow]:
 
         result = 0
         for a in ins.get("actions", []):
-            if objective == "Inbox" and a.get("action_type") in ("onsite_conversion.messaging_first_reply", "onsite_conversion.messaging_conversation_started_7d"):
+            if objective == "Inbox" and a.get("action_type") == "onsite_conversion.messaging_conversation_started_7d":
                 result += int(float(a.get("value", 0)))
             elif objective == "Purchase" and a.get("action_type") in ("purchase", "offsite_conversion.fb_pixel_purchase"):
                 result += int(float(a.get("value", 0)))

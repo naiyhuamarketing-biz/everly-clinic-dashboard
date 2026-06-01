@@ -25,7 +25,7 @@ CLIENTS = [
            os.getenv("SHEET_EVERLY", ""),
            "Purchase", "#D4A5A5"),
     Client("yiaoya", "เยียวยา (Yiaoya)",
-           os.getenv("FB_ACCOUNT_YIAOYA", ""),
+           os.getenv("FB_ACCOUNT_YIAOYA", "702987921684167"),
            os.getenv("SHEET_YIAOYA", ""),
            "Inbox", "#C9A961"),
     Client("tuba", "Tuba",

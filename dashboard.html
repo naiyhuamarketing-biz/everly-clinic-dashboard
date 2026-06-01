@@ -737,7 +737,7 @@ const API_BASE = (() => {
 })();
 const STORAGE_KEY = 'yiaoya-hub-v2';
 const STALE_STORAGE_KEYS = ['everly-hub-v1', 'yiaoya-hub-v1', 'everly-hub-v2-old'];
-const NOT_CONFIGURED_TEXT = '⚠️ ยังไม่ได้เชื่อมบัญชีโฆษณาเยียวยาที่ถูกต้อง — ต้องตั้งค่า FB_ACCESS_TOKEN + FB_ACCOUNT_YIAOYA ก่อน ระบบจึงจะดึงข้อมูลจริง';
+const NOT_CONFIGURED_TEXT = '⚠️ ยังไม่ได้เชื่อมบัญชีโฆษณาเยียวยาที่ถูกต้อง — ต้องตั้งค่า FB_ACCESS_TOKEN ก่อน ระบบจึงจะดึงข้อมูลจริงจากบัญชี Yiaoya ทั้ง 2 ตัว';
 
 STALE_STORAGE_KEYS.forEach(key => {
   try { localStorage.removeItem(key); } catch(e) {}

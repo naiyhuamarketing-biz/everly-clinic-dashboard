@@ -179,4 +179,5 @@ def _top_campaign_per_day(account_id: str, since: date, until: date) -> dict:
 def signature() -> str:
     """Cache-busting signature — token + account_id."""
     tok = _secret("FB_ACCESS_TOKEN", "")
-    return f"{tok[-12:]}-{_secret('FB_ACCOUNT_EVERLY', '')}"
+    accounts = _secret("FB_ACCOUNT_YIAOYA_ACCOUNTS") or _secret("FB_ACCOUNT_YIAOYA", "")
+    return f"{tok[-12:]}-{accounts}"

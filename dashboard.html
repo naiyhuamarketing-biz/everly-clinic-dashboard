@@ -735,7 +735,13 @@ const API_BASE = (() => {
   }
   return window.location.origin;
 })();
-const STORAGE_KEY = 'yiaoya-hub-v1';
+const STORAGE_KEY = 'yiaoya-hub-v2';
+const STALE_STORAGE_KEYS = ['everly-hub-v1', 'yiaoya-hub-v1'];
+const NOT_CONFIGURED_TEXT = '⚠️ ยังไม่ได้เชื่อมบัญชีโฆษณาเยียวยาที่ถูกต้อง — ต้องตั้งค่า FB_ACCESS_TOKEN + FB_ACCOUNT_YIAOYA ก่อน ระบบจึงจะดึงข้อมูลจริง';
+
+STALE_STORAGE_KEYS.forEach(key => {
+  try { localStorage.removeItem(key); } catch(e) {}
+});
 
 // ============= STATE =============
 const DEFAULT_STATE = {
@@ -936,7 +942,7 @@ async function checkApiHealth() {
   try {
     const res = await fetch(API_BASE + '/api/health', { cache:'no-store' });
     if (!res.ok) return false;
-    const j = await res.json(); return j.ok && (j.has_token || j.mock || j.mock_data);
+    const j = await res.json(); return j.ok && j.configured === true;
   } catch { return false; }
 }
 async function apiGet(path) {
@@ -949,10 +955,31 @@ async function apiGet(path) {
 }
 function apiErrorText(error) {
   const message = error && error.message ? error.message : String(error || '');
-  if (message.includes('FB_ACCESS_TOKEN not set')) {
-    return '⚠️ ยังไม่ได้ตั้งค่า FB_ACCESS_TOKEN — หน้าเว็บเปิดได้ แต่ยังดึงข้อมูล Meta จริงไม่ได้';
+  if (message.includes('FB_ACCESS_TOKEN not set') || message.includes('FB_ACCOUNT') || message.includes('Meta API error')) {
+    return NOT_CONFIGURED_TEXT;
   }
   return `⚠️ เชื่อม API ไม่ได้ — ${message}`;
+}
+
+async function applyConfigurationGate() {
+  try {
+    const res = await fetch(API_BASE + '/api/health', { cache:'no-store' });
+    const health = await res.json();
+    if (health.configured === true) return true;
+  } catch(e) {}
+
+  ['ov','dy','tp','tr','rp'].forEach(prefix => setLive(prefix, false));
+  const ovMeta = document.getElementById('ov-meta');
+  const rpPreview = document.getElementById('rp-preview');
+  const rpPeriod = document.getElementById('rp-period');
+  const tpContent = document.getElementById('tp-content');
+  const dyContent = document.getElementById('dy-content');
+  if (ovMeta) ovMeta.textContent = NOT_CONFIGURED_TEXT;
+  if (rpPreview) rpPreview.textContent = NOT_CONFIGURED_TEXT;
+  if (rpPeriod) rpPeriod.textContent = 'NOT CONFIGURED';
+  if (tpContent) tpContent.innerHTML = `<div class="card p-8 text-center" style="color:var(--dusty)">${NOT_CONFIGURED_TEXT}</div>`;
+  if (dyContent) dyContent.innerHTML = `<div class="card p-8 text-center" style="color:var(--dusty)">${NOT_CONFIGURED_TEXT}</div>`;
+  return false;
 }
 function setLive(prefix, state) {
   const mode = state === true ? 'live' : (state || 'off');
@@ -1488,6 +1515,7 @@ async function handleSectionToggle(name, details) {
 window.onSectionToggle = handleSectionToggle;
 
 async function refreshAllLive() {
+  if (!(await applyConfigurationGate())) return;
   toast('↻ Refreshing all live data...');
   const tasks = [fetchOverview(), fetchTopRange(), fetchTrend(), fetchReport()];
   if (typeof fetchDailyRange === 'function' && document.getElementById('sec-daily')) {
@@ -1563,7 +1591,7 @@ function renderAll() {
   // Auto-trigger initial loads (Section 01 is open by default)
   setTimeout(async () => {
     if (_loaded.overview) return;
-    const ok = await checkApiHealth();
+    const ok = await applyConfigurationGate();
     if (ok) { _loaded.overview = true; fetchOverview(); }
     else setLive('ov', false);
   }, 200);

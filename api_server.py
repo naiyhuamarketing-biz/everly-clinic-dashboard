@@ -313,12 +313,14 @@ def _write_summary_snapshot(since: date, until: date, data: dict) -> None:
 # ── Endpoints ───────────────────────────────────────────────────────
 @app.get("/api/health")
 def health():
-    has_token = bool(os.getenv("FB_ACCESS_TOKEN"))
+    has_token = _has_fb_token()
     mock = _mock_data_enabled()
     return {
         "ok": True,
         "account_id": ACCOUNT_ID,
         "has_token": has_token,
+        "configured": has_token,
+        "required_account_env": "FB_ACCOUNT_YIAOYA",
         "mock": mock,
         "mock_data": mock,
         "now_bkk": now_bkk().isoformat(),

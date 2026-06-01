@@ -17,6 +17,7 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 
+import requests
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Query, Body, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -34,6 +35,7 @@ from lib.fb_ads import fetch_top3_ads, to_dict_list
 
 ACCOUNT_ID = os.getenv("FB_ACCOUNT_YIAOYA", "")
 BANGKOK_TZ = timezone(timedelta(hours=7))
+META_GRAPH_VERSION = os.getenv("META_GRAPH_VERSION", "v20.0")
 
 app = FastAPI(title="Yiaoya Data API", version="1.0")
 app.add_middleware(
@@ -325,6 +327,65 @@ def health():
         "mock_data": mock,
         "now_bkk": now_bkk().isoformat(),
         "cache_keys": list(_CACHE.keys()),
+    }
+
+
+@app.get("/api/yiaoya/accounts")
+def yiaoya_accounts():
+    """List ad accounts visible to the configured Meta token.
+
+    This is intentionally read-only and used to verify that the dashboard is
+    connected to the correct Yiaoya Business/ad-account set before live data is
+    shown.
+    """
+    token = os.getenv("FB_ACCESS_TOKEN", "")
+    if not token:
+        raise HTTPException(503, "FB_ACCESS_TOKEN not set")
+
+    configured_ids = {
+        value.strip().replace("act_", "")
+        for value in (os.getenv("FB_ACCOUNT_YIAOYA_ACCOUNTS", "") + "," + ACCOUNT_ID).split(",")
+        if value.strip()
+    }
+    fields = "id,account_id,name,account_status,disable_reason,currency,business{name}"
+    url = f"https://graph.facebook.com/{META_GRAPH_VERSION}/me/adaccounts"
+    params = {"fields": fields, "limit": 100, "access_token": token}
+    accounts = []
+
+    try:
+        while url:
+            res = requests.get(url, params=params, timeout=30)
+            params = None
+            if res.status_code >= 400:
+                raise HTTPException(res.status_code, f"Meta API error: {res.text[:400]}")
+            payload = res.json()
+            for item in payload.get("data", []):
+                raw_id = str(item.get("account_id") or item.get("id") or "").replace("act_", "")
+                status_code = item.get("account_status")
+                accounts.append({
+                    "id": raw_id,
+                    "act_id": f"act_{raw_id}" if raw_id else item.get("id"),
+                    "name": item.get("name", ""),
+                    "business": (item.get("business") or {}).get("name", ""),
+                    "currency": item.get("currency", ""),
+                    "account_status": status_code,
+                    "active": status_code == 1,
+                    "disable_reason": item.get("disable_reason"),
+                    "configured": raw_id in configured_ids,
+                })
+            url = (payload.get("paging") or {}).get("next")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(502, f"Meta API error: {exc}") from exc
+
+    return {
+        "ok": True,
+        "configured_account_ids": sorted(configured_ids),
+        "total": len(accounts),
+        "active_total": sum(1 for account in accounts if account["active"]),
+        "accounts": accounts,
+        "now_bkk": now_bkk().isoformat(),
     }
 
 

@@ -82,7 +82,7 @@ cd ~/Desktop/Code/ads-report-everly
 | `api_server.py` | ⭐ FastAPI server — serves HTML + Meta API + LINE |
 | `dashboard.html` | ⭐ Single-page Tailwind + Chart.js dashboard |
 | `dashboard.py` | (legacy) Streamlit version of the same data |
-| `lib/meta_loader.py` | Meta Marketing API client (cache 10 min) |
+| `lib/meta_loader.py` | Meta Marketing API client (cache 60 sec) |
 | `lib/fb_ads.py` | Top ads query |
 | `lib/notify.py` | LINE push (`send_line_summary`) |
 | `render.yaml` | Render blueprint (web service) |

@@ -20,7 +20,7 @@
 | ฟีเจอร์ | สถานะ |
 |---|---|
 | Dashboard เปิดได้ 24/7 | ✅ Render free tier |
-| Live Meta API (cache 10 นาที) | ✅ |
+| Live Meta API (รีเฟรชสด ~1 นาที) | ✅ |
 | Auto refresh ทุกครั้ง user กด refresh | ✅ |
 | **ส่ง LINE 00:00 ทุกคืน** | ✅ GitHub Actions cron |
 | Auto-redeploy เมื่อ push code | ✅ |

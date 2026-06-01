@@ -1,4 +1,4 @@
-"""FastAPI bridge — expose เยียวยา Meta data to the HTML dashboard.
+"""FastAPI bridge — expose Yiaoya Meta data to the HTML dashboard.
 
 Reuses lib/meta_loader (same source as dashboard.py / Streamlit Cloud) so the
 HTML dashboard reads the exact same numbers as Streamlit (when both running).
@@ -32,7 +32,7 @@ sys.path.insert(0, str(ROOT))
 from lib.meta_loader import fetch_daily, signature
 from lib.fb_ads import fetch_top3_ads, to_dict_list
 
-ACCOUNT_ID = os.getenv("FB_ACCOUNT_YIAOYA") or os.getenv("FB_ACCOUNT_EVERLY", "")
+ACCOUNT_ID = os.getenv("FB_ACCOUNT_YIAOYA", "")
 BANGKOK_TZ = timezone(timedelta(hours=7))
 
 app = FastAPI(title="Yiaoya Data API", version="1.0")
@@ -50,15 +50,15 @@ SENT_STATE_FILE = Path(os.getenv("SENT_STATE_FILE", "/tmp/everly-line-sent.json"
 SUMMARY_SNAPSHOT_DIR = Path(os.getenv("SUMMARY_SNAPSHOT_DIR", "/tmp/everly-summary-snapshots"))
 SEND_DAILY_LINE_LOCK = threading.Lock()
 
-# Mount /assets so brand logos (assets/logos/everly.png etc.) are served
+# Mount /assets so brand logos (assets/logos/yiaoya.png etc.) are served
 # directly by FastAPI — used by <img src="/assets/logos/..."> in dashboard.html
 if ASSETS_DIR.exists():
     app.mount("/assets", StaticFiles(directory=str(ASSETS_DIR)), name="assets")
 
 
-# ── Cache (mirrors Streamlit's @st.cache_data ttl=600) ─────────────
+# ── Cache: keep Meta API reads fresh while avoiding duplicate rapid refreshes ─────────────
 _CACHE: dict = {}
-TTL = 600  # 10 min
+TTL = int(os.getenv("CACHE_TTL_SECONDS", "60"))
 
 
 def _cached(key: str, loader):
@@ -109,15 +109,15 @@ def _iter_days(since: date, until: date):
 
 def _mock_daily_records(since: date, until: date) -> list[dict]:
     campaigns = [
-        "เยียวยา · กายภาพบำบัด",
-        "เยียวยา · ปรึกษานักกายภาพ",
-        "เยียวยา · โปรโมชั่นรักษา",
-        "เยียวยา · รีวิวเคสจริง",
-        "เยียวยา · Retargeting",
+        "Everly · Beauty Campaign",
+        "Everly · Consultation",
+        "Everly · Promotion",
+        "Everly · Case Review",
+        "Everly · Retargeting",
     ]
     out = []
     for d in _iter_days(since, until):
-        rng = random.Random(f"yiaoya-local-mock:{d.isoformat()}")
+        rng = random.Random(f"everly-local-mock:{d.isoformat()}")
         spend = round(rng.uniform(950, 2800), 2)
         result = rng.randint(8, 32)
         reach = rng.randint(2500, 9000)
@@ -156,7 +156,7 @@ def _mock_top_ads_range(since: date, until: date, limit: int) -> dict:
     ads: dict[str, dict] = {}
     for record in _mock_daily_records(since, until):
         day = _day_totals(record)
-        name = day.get("top_campaign") or "เยียวยา · Mock Campaign"
+        name = day.get("top_campaign") or "Everly · Mock Campaign"
         row = ads.setdefault(name, {
             "campaign": name,
             "spent": 0,
@@ -319,7 +319,7 @@ def health():
         "ok": True,
         "account_id": ACCOUNT_ID,
         "has_token": has_token,
-        "configured": has_token,
+        "configured": bool(has_token and ACCOUNT_ID),
         "required_account_env": "FB_ACCOUNT_YIAOYA",
         "mock": mock,
         "mock_data": mock,
@@ -565,7 +565,7 @@ def everly_report(
 
     medals = ["🥇", "🥈", "🥉"]
     lines = []
-    lines.append(f"🌿 เยียวยา — Daily Report {d.strftime('%-d/%-m/%Y')}")
+    lines.append(f"🌿 Yiaoya Group — Daily Report {d.strftime('%-d/%-m/%Y')}")
     lines.append(
         f"💸 Spend: ฿{spend:,.2f} | 📨 Inbox: {result} ข้อความ | "
         f"฿/Inbox: ฿{cpr:,.0f}"
@@ -1994,7 +1994,7 @@ def line_status():
     has_token = bool(os.getenv("LINE_CHANNEL_ACCESS_TOKEN"))
     has_group = bool(os.getenv("LINE_GROUP_ID_EVERLY") or os.getenv("LINE_GROUP_ID"))
     return {
-        "configured": has_token and has_group,
+        "configured": bool(has_token and ACCOUNT_ID) and has_group,
         "has_token": has_token,
         "has_group": has_group,
     }
@@ -2002,7 +2002,7 @@ def line_status():
 
 @app.post("/api/line/send")
 def line_send(payload: dict = Body(...)):
-    """Push dashboard-provided report text to the Yiaoya LINE group."""
+    """Push dashboard-provided report text to the Everly LINE group."""
     text = str(payload.get("text") or "").strip()
     if not text:
         raise HTTPException(400, "text required")
@@ -2073,7 +2073,7 @@ def _build_daily_text(target_d: date) -> str:
     mtd_profit = mtd_conv - mtd_spend
 
     L = []
-    L.append("EVERLY CLINIC — DAILY REPORT")
+    L.append("YIAOYA GROUP — DAILY REPORT")
     L.append("")
     L.append(f"Report ประจำวัน ({_thai_date(target_d)})")
     L.append("")

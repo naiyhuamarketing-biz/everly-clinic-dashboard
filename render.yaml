@@ -1,10 +1,10 @@
-# Render blueprint — TUBA dashboard
+# Render blueprint — Everly Clinic dashboard
 # Web service only on free tier (cron jobs require paid plan).
 # Daily LINE notification is handled by GitHub Actions cron (.github/workflows/daily-line.yml).
 #
 # Env vars set via Render dashboard (NOT committed):
-#   FB_ACCESS_TOKEN, FB_APP_ID, FB_APP_SECRET, FB_ACCOUNT_TUBA=1979003202592442
-#   LINE_CHANNEL_ACCESS_TOKEN, LINE_GROUP_ID_TUBA
+#   FB_ACCESS_TOKEN, FB_APP_ID, FB_APP_SECRET, FB_ACCOUNT_EVERLY
+#   LINE_CHANNEL_ACCESS_TOKEN, LINE_GROUP_ID_EVERLY
 services:
   - type: web
     name: everly-clinic

@@ -16,29 +16,13 @@ class Client:
 
 
 CLIENTS = [
-    Client("glow", "Glow Visage Clinic",
-           os.getenv("FB_ACCOUNT_GLOW", ""),
-           os.getenv("SHEET_GLOW", ""),
-           "Inbox", "#E8B4BC"),
     Client("everly", "Everly Clinic",
            os.getenv("FB_ACCOUNT_EVERLY", ""),
            os.getenv("SHEET_EVERLY", ""),
            "Purchase", "#D4A5A5"),
-    Client("yiaoya", "เยียวยา (Yiaoya)",
-           os.getenv("FB_ACCOUNT_YIAOYA", "702987921684167"),
-           os.getenv("SHEET_YIAOYA", ""),
-           "Inbox", "#C9A961"),
-    Client("tuba", "Tuba",
-           os.getenv("FB_ACCOUNT_TUBA", "1979003202592442"),
-           os.getenv("SHEET_TUBA", ""),
-           "Purchase", "#B8869C"),
-    Client("beautier", "Beautier Clinic",
-           os.getenv("FB_ACCOUNT_BEAUTIER", ""),
-           os.getenv("SHEET_BEAUTIER", ""),
-           "Inbox", "#D9899C"),
 ]
 
-MOCK_MODE = os.getenv("MOCK_MODE", "true").lower() == "true"
+MOCK_MODE = os.getenv("MOCK_MODE", "false").lower() == "true"
 
 THEME = {
     "burgundy": "#6B1A35",

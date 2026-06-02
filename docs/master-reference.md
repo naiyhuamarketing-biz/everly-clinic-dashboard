@@ -102,7 +102,7 @@ curl -X POST https://everly-clinic.onrender.com/api/everly/send-daily-line
 - [ ] ใส่โลโก้จริงแทน "e" monogram (save `assets/everly_logo.png`)
 - [ ] สร้าง LINE group เฉพาะ Everly (ตอนนี้ใช้กลุ่ม Glow ร่วม)
 - [ ] AI Insights — narrative สรุปเดือน
-- [ ] เพิ่มคลินิกอื่น (Yiaoya / Tuba / Beautier) ใช้ pattern เดียวกัน
+- [ ] เพิ่มคลินิกอื่นในอนาคตโดยแยก repo/env ให้ชัดเจน
 
 ---
 

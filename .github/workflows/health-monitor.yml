@@ -1,21 +1,12 @@
-name: Health monitor
+name: TUBA health monitor
 
-# Every 6 hours, deep-check the entire pipeline:
-#   - Render dashboard responds
-#   - Meta API works (via keepalive endpoint)
-#   - LINE messaging is configured
-# If anything fails → POST alert to LINE group.
-#
-# Why 6h not 30min? Render keepalive already runs every 14min; this is
-# the "deep" check that catches subtle issues (Meta API errors, LINE
-# config drift) without spamming the LINE group.
 on:
   schedule:
-    - cron: '0 */6 * * *'  # every 6 hours UTC
+    - cron: '0 */6 * * *'
   workflow_dispatch:
 
 concurrency:
-  group: health-monitor
+  group: tuba-health-monitor
   cancel-in-progress: false
 
 jobs:
@@ -23,53 +14,26 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Wake Render
-        run: |
-          for i in 1 2 3; do
-            CODE=$(curl -s -o /dev/null --max-time 90 -w "%{http_code}" \
-                   "https://everly-clinic.onrender.com/api/health" || echo "000")
-            echo "wake $i: $CODE"
-            [ "$CODE" = "200" ] && break
-            sleep 10
-          done
-
       - name: Deep health check
-        id: check
         run: |
           set +e
           ALERTS=""
-
-          # 1. Health endpoint
-          H=$(curl -s --max-time 30 "https://everly-clinic.onrender.com/api/health")
+          H=$(curl -s --max-time 60 "https://everly-clinic.onrender.com/api/health")
           if ! echo "$H" | grep -q '"ok":true'; then
             ALERTS="$ALERTS%0A• /api/health failed"
           fi
-
-          # 2. Keepalive (verifies Meta API connectivity)
-          K=$(curl -s --max-time 60 "https://everly-clinic.onrender.com/api/everly/keepalive")
+          K=$(curl -s --max-time 60 "https://everly-clinic.onrender.com/api/tuba/keepalive")
           if ! echo "$K" | grep -q '"ok":true'; then
-            ALERTS="$ALERTS%0A• Meta API call failed (keepalive)"
-            ERR=$(echo "$K" | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('error',''))" 2>/dev/null | head -c 200)
-            [ -n "$ERR" ] && ALERTS="$ALERTS%0A  → $ERR"
+            ALERTS="$ALERTS%0A• TUBA Meta keepalive failed"
           fi
-
-          # 3. LINE configured
           L=$(curl -s --max-time 30 "https://everly-clinic.onrender.com/api/line/status")
           if ! echo "$L" | grep -q '"configured":true'; then
-            ALERTS="$ALERTS%0A• LINE config drift"
+            ALERTS="$ALERTS%0A• TUBA LINE config drift"
           fi
-
           if [ -n "$ALERTS" ]; then
-            echo "alerts=true" >> "$GITHUB_OUTPUT"
-            BODY="🚨 Everly Clinic · HEALTH CHECK FAILED${ALERTS}%0A%0Ahttps://everly-clinic.onrender.com"
-            echo "$BODY"
-            DECODED=$(printf '%s' "$BODY" | sed 's/%0A/\n/g')
-            curl --fail --max-time 30 \
-              -X POST "https://everly-clinic.onrender.com/api/line/send" \
-              -H "Content-Type: application/json" \
-              -d "$(python3 -c "import json,sys; print(json.dumps({'text': sys.argv[1]}))" "$DECODED")" \
-              || echo "(LINE send also failed — system is in degraded state)"
+            MSG="TUBA · HEALTH CHECK FAILED${ALERTS}%0A%0Ahttps://everly-clinic.onrender.com/dashboard"
+            DECODED=$(printf '%s' "$MSG" | sed 's/%0A/\n/g')
+            curl --max-time 30 -X POST "https://everly-clinic.onrender.com/api/line/send" -H "Content-Type: application/json" -d "$(python3 -c "import json,sys; print(json.dumps({'text': sys.argv[1]}))" "$DECODED")" || true
             exit 1
-          else
-            echo "  ✓ all systems healthy"
           fi
+          echo "TUBA systems healthy"

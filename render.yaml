@@ -1,16 +1,17 @@
-# Render blueprint — Everly Clinic dashboard
-# Env vars set via Render dashboard (NOT committed):
-#   FB_ACCESS_TOKEN, FB_APP_ID, FB_APP_SECRET, FB_ACCOUNT_EVERLY CLINIC_ACCOUNTS
-#   LINE_CHANNEL_ACCESS_TOKEN, LINE_GROUP_ID_EVERLY CLINIC
+# Render blueprint — TUBA dashboard
+# Required env vars:
+#   FB_ACCESS_TOKEN, FB_APP_ID, FB_APP_SECRET, FB_ACCOUNT_TUBA
+#   LINE_CHANNEL_ACCESS_TOKEN, LINE_GROUP_ID_TUBA
 services:
   - type: web
-    name: everly-dashboard
-    runtime: python
+    name: tuba-ads-dashboard
+    env: python
     plan: free
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn api_server:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
     envVars:
-      - key: PYTHON_VERSION
-        value: "3.11"
-      - key: TZ
-        value: Asia/Bangkok
+      - key: FB_ACCOUNT_TUBA
+        value: "1979003202592442"
+      - key: MOCK_MODE
+        value: "false"

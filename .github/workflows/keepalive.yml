@@ -1,18 +1,12 @@
-name: Light health ping
+name: TUBA light health ping
 
-# Pings the keepalive endpoint sparingly:
-#   1. Confirms Render is reachable
-#   2. Avoids high service-initiated traffic on Render free tier
-#
 on:
   schedule:
-    # Every 6 hours. Let Render free tier sleep naturally between visits.
     - cron: '0 */6 * * *'
   workflow_dispatch:
 
-# Cancel pending pings if a new one starts (avoid pile-up)
 concurrency:
-  group: keepalive
+  group: tuba-keepalive
   cancel-in-progress: true
 
 jobs:
@@ -20,10 +14,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
-      - name: Ping lightweight endpoint
+      - name: Ping TUBA keepalive
         run: |
-          URL="https://everly-clinic.onrender.com/api/everly/keepalive"
-          # Allow up to 90s for cold-start wake; ignore non-200 (don't fail action)
+          URL="https://everly-clinic.onrender.com/api/tuba/keepalive"
           STATUS=$(curl -s -o /tmp/body --max-time 90 -w "%{http_code}" "$URL" || echo "000")
           echo "HTTP $STATUS"
           cat /tmp/body 2>/dev/null | head -c 500 || true

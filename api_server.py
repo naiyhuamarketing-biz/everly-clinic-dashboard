@@ -1,4 +1,4 @@
-"""FastAPI bridge — expose Everly Clinic Meta data to the HTML dashboard.
+"""FastAPI bridge — expose Meta data to the HTML dashboard.
 
 Reuses lib/meta_loader (same source as dashboard.py / Streamlit Cloud) so the
 HTML dashboard reads the exact same numbers as Streamlit (when both running).
@@ -25,6 +25,7 @@ from fastapi.staticfiles import StaticFiles
 
 ROOT = Path(__file__).parent
 load_dotenv(ROOT / ".env")
+load_dotenv(ROOT / ".env.local")
 
 import sys
 sys.path.insert(0, str(ROOT))
@@ -33,9 +34,11 @@ from lib.meta_loader import fetch_daily, signature
 from lib.fb_ads import fetch_top3_ads, to_dict_list
 
 ACCOUNT_ID = os.getenv("FB_ACCOUNT_EVERLY", "")
+DEFAULT_TUBA_ACCOUNT = "1979003202592442"
+TUBA_ACCOUNT_ID = os.getenv("FB_ACCOUNT_TUBA", DEFAULT_TUBA_ACCOUNT)
 BANGKOK_TZ = timezone(timedelta(hours=7))
 
-app = FastAPI(title="Everly Clinic Data API", version="1.0")
+app = FastAPI(title="TUBA Ads Data API", version="1.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -80,6 +83,48 @@ def today_bkk() -> date:
     return now_bkk().date()
 
 
+def _account_ids_for(client: str) -> list[str]:
+    if client == "tuba":
+        raw = os.getenv("FB_ACCOUNT_TUBA_ACCOUNTS") or TUBA_ACCOUNT_ID or DEFAULT_TUBA_ACCOUNT
+        ids = [item.strip().replace("act_", "") for item in raw.split(",") if item.strip()]
+        if DEFAULT_TUBA_ACCOUNT not in ids:
+            ids.insert(0, DEFAULT_TUBA_ACCOUNT)
+        seen = set()
+        return [account_id for account_id in ids if not (account_id in seen or seen.add(account_id))]
+    return [ACCOUNT_ID.replace("act_", "")] if ACCOUNT_ID else []
+
+
+def _account_label(account_id: str) -> str:
+    labels = {
+        DEFAULT_TUBA_ACCOUNT: "TUBA",
+    }
+    return labels.get(account_id, f"act_{account_id}")
+
+
+def _cache_signature_for(client: str) -> str:
+    token_tail = os.getenv("FB_ACCESS_TOKEN", "")[-12:]
+    return f"{client}:{token_tail}-{'_'.join(_account_ids_for(client))}"
+
+
+def _has_fb_token_for(client: str) -> bool:
+    return bool(os.getenv("FB_ACCESS_TOKEN") and _account_ids_for(client))
+
+
+def _ensure_meta_ready_for(client: str) -> None:
+    if _mock_data_enabled_for(client):
+        return
+    if not _account_ids_for(client):
+        raise HTTPException(
+            status_code=503,
+            detail=f"Meta account not configured: set FB_ACCOUNT_{client.upper()}",
+        )
+    if not os.getenv("FB_ACCESS_TOKEN"):
+        raise HTTPException(
+            status_code=503,
+            detail=f"Meta token not configured: set FB_ACCESS_TOKEN with access to act_{_account_ids_for(client)[0]}",
+        )
+
+
 # ── Helpers ─────────────────────────────────────────────────────────
 def _has_fb_token() -> bool:
     return bool(os.getenv("FB_ACCESS_TOKEN") and ACCOUNT_ID)
@@ -99,6 +144,17 @@ def _mock_data_enabled() -> bool:
     if os.getenv("VERCEL") or os.getenv("RENDER"):
         return False
     return not _has_fb_token()
+
+
+def _mock_data_enabled_for(client: str) -> bool:
+    mock_env = os.getenv("MOCK_MODE", "").strip().lower()
+    if mock_env in {"true", "1", "yes"}:
+        return True
+    if mock_env in {"false", "0", "no"}:
+        return False
+    if os.getenv("VERCEL") or os.getenv("RENDER"):
+        return False
+    return not _has_fb_token_for(client)
 
 
 def _iter_days(since: date, until: date):
@@ -228,6 +284,35 @@ def _fetch_range(since: date, until: date):
     return _cached(key, lambda: fetch_daily(ACCOUNT_ID, since, until))
 
 
+def _fetch_range_for_client(client: str, since: date, until: date):
+    if _mock_data_enabled_for(client):
+        records = _mock_daily_records(since, until)
+        if client == "tuba":
+            for record in records:
+                if record.get("top_campaign"):
+                    record["top_campaign"] = record["top_campaign"].replace("Everly", "TUBA")
+                for ad in record.get("ads", []):
+                    if ad.get("campaign"):
+                        ad["campaign"] = ad["campaign"].replace("Everly", "TUBA")
+        return records
+    account_ids = _account_ids_for(client)
+    key = f"range:{client}:{since.isoformat()}:{until.isoformat()}:{_cache_signature_for(client)}"
+
+    def _load():
+        records = []
+        for account_id in account_ids:
+            account_records = fetch_daily(account_id, since, until)
+            label = _account_label(account_id)
+            for record in account_records:
+                for ad in record.get("ads", []):
+                    campaign = ad.get("campaign") or "Daily Total"
+                    ad["campaign"] = f"{label} · {campaign}"
+                records.append(record)
+        return records
+
+    return _cached(key, _load)
+
+
 def _default_report_date() -> date:
     """Pick the report date safely for scheduled jobs.
 
@@ -328,6 +413,7 @@ def health():
     }
 
 
+@app.get("/api/yiaoya/summary")
 @app.get("/api/everly/summary")
 def everly_summary(
     since: Optional[str] = Query(None, description="YYYY-MM-DD; defaults to month start"),
@@ -397,6 +483,7 @@ def _resolve_target_date(target: Optional[str], date_value: Optional[str], defau
     return date.fromisoformat(target or date_value) if (target or date_value) else default
 
 
+@app.get("/api/yiaoya/day")
 @app.get("/api/everly/day")
 def everly_day(
     target: Optional[str] = Query(None),
@@ -414,6 +501,7 @@ def everly_day(
     return _day_totals(records[0])
 
 
+@app.get("/api/yiaoya/top-ads")
 @app.get("/api/everly/top-ads")
 def everly_top_ads(
     target: Optional[str] = Query(None),
@@ -435,6 +523,7 @@ def everly_top_ads(
     return response
 
 
+@app.get("/api/yiaoya/top-ads-range")
 @app.get("/api/everly/top-ads-range")
 def everly_top_ads_range(
     since: Optional[str] = None,
@@ -523,6 +612,7 @@ def everly_top_ads_range(
     }
 
 
+@app.get("/api/yiaoya/report")
 @app.get("/api/everly/report")
 def everly_report(
     target: Optional[str] = Query(None),
@@ -605,6 +695,278 @@ def everly_report(
         response["mock"] = True
         response["warning"] = "MOCK_MODE/no FB_ACCESS_TOKEN — showing deterministic local mock data"
     return response
+
+
+def _summary_payload_for_client(client: str, since: Optional[str], until: Optional[str]) -> dict:
+    today = today_bkk()
+    s = date.fromisoformat(since) if since else date(today.year, today.month, 1)
+    u = date.fromisoformat(until) if until else today
+    _ensure_meta_ready_for(client)
+
+    try:
+        records = _fetch_range_for_client(client, s, u)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Meta API error: {e}") from e
+
+    days = [_day_totals(r) for r in records]
+    days = [d for d in days if d]
+
+    spend = sum(d["spent"] for d in days)
+    result = sum(d["result"] for d in days)
+    conv = sum(d["conversion"] for d in days)
+    impressions = sum(d["impression"] for d in days)
+    reach = sum(d["reach"] for d in days)
+    roas = (conv / spend) if spend else 0
+    cpr = (spend / result) if result else 0
+    frequency = (impressions / reach) if reach else 0
+    net = conv - spend
+    n_days = len(days) or 1
+    target_roas = 10.0
+
+    response = {
+        "client": client,
+        "account_ids": _account_ids_for(client),
+        "since": s.isoformat(),
+        "until": u.isoformat(),
+        "n_days": len(days),
+        "totals": {
+            "spend": round(spend, 2),
+            "revenue": round(conv, 2),
+            "result": result,
+            "roas": round(roas, 2),
+            "cost_per_result": round(cpr, 2),
+            "frequency": round(frequency, 2),
+            "impressions": impressions,
+            "reach": reach,
+            "net": round(net, 2),
+            "avg_daily_spend": round(spend / n_days, 2),
+            "target_roas": target_roas,
+            "roas_pct_of_target": round((roas / target_roas * 100) if target_roas else 0, 1),
+        },
+        "days": days,
+        "fetched_at": now_bkk().isoformat(),
+    }
+    if _mock_data_enabled_for(client):
+        response["mock"] = True
+        response["warning"] = "MOCK_MODE/no FB_ACCESS_TOKEN — showing deterministic local mock data"
+    return response
+
+
+def _top_ads_payload_for_client(client: str, target: Optional[str], date_value: Optional[str]) -> dict:
+    d = _resolve_target_date(target, date_value, today_bkk() - timedelta(days=1))
+    _ensure_meta_ready_for(client)
+    try:
+        rows = _cached(
+            f"top3:{client}:{d.isoformat()}:{_cache_signature_for(client)}",
+            lambda: [
+                row
+                for account_id in _account_ids_for(client)
+                for row in fetch_top3_ads(account_id, d, "Inbox")
+            ],
+        )
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Meta API error: {e}") from e
+
+    rows = sorted(
+        [row for row in rows if row.spent > 0],
+        key=lambda row: ((row.spent / row.result) if row.result else 9e9, -row.spent),
+    )[:3]
+    response = {"client": client, "date": d.isoformat(), "account_ids": _account_ids_for(client), "ads": to_dict_list(rows)}
+    if _mock_data_enabled_for(client):
+        response["mock"] = True
+        response["warning"] = "MOCK_MODE/no FB_ACCESS_TOKEN — showing deterministic local mock data"
+    return response
+
+
+def _top_ads_range_payload_for_client(client: str, since: Optional[str], until: Optional[str], limit: int) -> dict:
+    today = today_bkk()
+    s = date.fromisoformat(since) if since else date(today.year, today.month, 1)
+    u = date.fromisoformat(until) if until else today
+    if _mock_data_enabled_for(client):
+        payload = _mock_top_ads_range(s, u, limit)
+        payload["client"] = client
+        payload["account_ids"] = _account_ids_for(client)
+        if client == "tuba":
+            for ad in payload.get("ads", []):
+                if ad.get("campaign"):
+                    ad["campaign"] = ad["campaign"].replace("Everly", "TUBA")
+        return payload
+    _ensure_meta_ready_for(client)
+
+    key = f"top-range:{client}:{s.isoformat()}:{u.isoformat()}:{_cache_signature_for(client)}"
+
+    def _load():
+        from facebook_business.api import FacebookAdsApi
+        from facebook_business.adobjects.adaccount import AdAccount
+        FacebookAdsApi.init(
+            app_id=os.getenv("FB_APP_ID"),
+            app_secret=os.getenv("FB_APP_SECRET"),
+            access_token=os.getenv("FB_ACCESS_TOKEN"),
+        )
+        fields = [
+            "ad_name", "campaign_name", "spend", "impressions", "reach",
+            "cpm", "actions", "action_values",
+        ]
+        params = {
+            "time_range": {"since": s.isoformat(), "until": u.isoformat()},
+            "level": "ad",
+        }
+        insights = []
+        for account_id in _account_ids_for(client):
+            account = AdAccount(f"act_{account_id}")
+            label = _account_label(account_id)
+            for item in account.get_insights(fields=fields, params=params):
+                row = dict(item)
+                row["_account_label"] = label
+                insights.append(row)
+        return insights
+
+    try:
+        insights = _cached(key, _load)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Meta API error: {e}") from e
+
+    rows = []
+    for ins in insights:
+        spent = float(ins.get("spend", 0) or 0)
+        impression = int(ins.get("impressions", 0) or 0)
+        reach = int(ins.get("reach", 0) or 0)
+        cpm = float(ins.get("cpm", 0) or 0)
+        result = 0
+        for a in ins.get("actions") or []:
+            if a.get("action_type") == "onsite_conversion.messaging_conversation_started_7d":
+                result += int(float(a.get("value", 0) or 0))
+        conv_value = 0.0
+        for v in ins.get("action_values") or []:
+            if v.get("action_type") in (
+                "purchase", "omni_purchase",
+                "offsite_conversion.fb_pixel_purchase",
+                "onsite_conversion.purchase",
+            ):
+                conv_value = max(conv_value, float(v.get("value", 0) or 0))
+        rows.append({
+            "campaign": f"{ins.get('_account_label', '')} · {(ins.get('ad_name') or '')}"[:100],
+            "spent": round(spent, 2),
+            "impression": impression,
+            "reach": reach,
+            "cpm": round(cpm, 2),
+            "result": result,
+            "cost_per_result": round(spent / result, 2) if result else 0,
+            "conversion": round(conv_value, 2),
+            "roas": round(conv_value / spent, 2) if spent else 0,
+        })
+
+    with_result = sorted(
+        [r for r in rows if r["result"] > 0],
+        key=lambda r: r["cost_per_result"],
+    )
+    no_result = sorted(
+        [r for r in rows if r["result"] == 0 and r["spent"] > 0],
+        key=lambda r: -r["spent"],
+    )
+    sorted_rows = with_result + no_result
+
+    return {
+        "client": client,
+        "account_ids": _account_ids_for(client),
+        "since": s.isoformat(),
+        "until": u.isoformat(),
+        "n_ads": len(sorted_rows),
+        "ads": sorted_rows[:limit],
+        "fetched_at": now_bkk().isoformat(),
+    }
+
+
+def _client_health_payload(client: str) -> dict:
+    has_token = bool(os.getenv("FB_ACCESS_TOKEN"))
+    account_ids = _account_ids_for(client)
+    mock_enabled = _mock_data_enabled_for(client)
+    return {
+        "ok": True,
+        "client": client,
+        "account_id": account_ids[0] if account_ids else "",
+        "account_ids": account_ids,
+        "account_labels": {account_id: _account_label(account_id) for account_id in account_ids},
+        "has_token": has_token,
+        "configured": bool((has_token and account_ids) or mock_enabled),
+        "required_account_env": f"FB_ACCOUNT_{client.upper()}",
+        "mock": mock_enabled,
+        "mock_data": mock_enabled,
+        "now_bkk": now_bkk().isoformat(),
+        "cache_keys": list(_CACHE.keys()),
+    }
+
+
+@app.get("/api/tuba/health")
+def tuba_health():
+    return _client_health_payload("tuba")
+
+
+@app.get("/api/tuba/summary")
+def tuba_summary(
+    since: Optional[str] = Query(None, description="YYYY-MM-DD; defaults to month start"),
+    until: Optional[str] = Query(None, description="YYYY-MM-DD; defaults to today"),
+):
+    return _summary_payload_for_client("tuba", since, until)
+
+
+@app.get("/api/tuba/day")
+def tuba_day(
+    target: Optional[str] = Query(None),
+    date_value: Optional[str] = Query(None, alias="date"),
+):
+    d = _resolve_target_date(target, date_value, today_bkk())
+    records = _fetch_range_for_client("tuba", d, d)
+    if not records:
+        return {"date": d.isoformat(), "spent": 0, "result": 0, "conversion": 0, "roas": 0, "cost_per_result": 0, "top_campaign": "", "empty": True}
+    return _day_totals(records[0])
+
+
+@app.get("/api/tuba/top-ads")
+def tuba_top_ads(
+    target: Optional[str] = Query(None),
+    date_value: Optional[str] = Query(None, alias="date"),
+):
+    return _top_ads_payload_for_client("tuba", target, date_value)
+
+
+@app.get("/api/tuba/top-ads-range")
+def tuba_top_ads_range(
+    since: Optional[str] = None,
+    until: Optional[str] = None,
+    limit: int = 10,
+):
+    return _top_ads_range_payload_for_client("tuba", since, until, limit)
+
+
+@app.get("/api/tuba/report")
+def tuba_report(
+    target: Optional[str] = Query(None),
+    date_value: Optional[str] = Query(None, alias="date"),
+):
+    d = _resolve_target_date(target, date_value, today_bkk() - timedelta(days=1))
+    day = _summary_payload_for_client("tuba", d.isoformat(), d.isoformat())
+    totals = day["totals"]
+    top_ads = _top_ads_payload_for_client("tuba", d.isoformat(), None)["ads"]
+    cpr = totals["cost_per_result"]
+    lines = [
+        f"TUBA — Daily Ads Report {d.strftime('%-d/%-m/%Y')}",
+        f"Spend: ฿{totals['spend']:,.2f} | Inbox: {totals['result']} | ฿/Inbox: ฿{cpr:,.0f}",
+        f"Revenue from Pixel: ฿{totals['revenue']:,.2f} | ROAS: {totals['roas']:.2f}x",
+        "",
+        "Top Ads:",
+    ]
+    for i, ad in enumerate(top_ads[:3], start=1):
+        unit = ad["cost_per_result"] if ad.get("cost_per_result") else 0
+        lines.append(f"{i}. {ad['campaign']} — {ad['result']} inbox / ฿{ad['spent']:,.0f} / ฿{unit:,.0f}")
+    return {
+        "client": "tuba",
+        "date": d.isoformat(),
+        "text": "\n".join(lines),
+        "totals": totals,
+        "top_ads": top_ads,
+        "fetched_at": now_bkk().isoformat(),
+    }
 
 
 @app.get("/api/everly/cache/clear")
@@ -1984,7 +2346,7 @@ def token_info():
 @app.get("/api/line/status")
 def line_status():
     has_token = bool(os.getenv("LINE_CHANNEL_ACCESS_TOKEN"))
-    has_group = bool(os.getenv("LINE_GROUP_ID_EVERLY") or os.getenv("LINE_GROUP_ID"))
+    has_group = bool(os.getenv("LINE_GROUP_ID_TUBA") or os.getenv("LINE_GROUP_ID_EVERLY") or os.getenv("LINE_GROUP_ID"))
     return {
         "configured": has_token and has_group,
         "has_token": has_token,
@@ -1994,14 +2356,14 @@ def line_status():
 
 @app.post("/api/line/send")
 def line_send(payload: dict = Body(...)):
-    """Push dashboard-provided report text to the Everly LINE group."""
+    """Push dashboard-provided report text to the configured LINE group."""
     text = str(payload.get("text") or "").strip()
     if not text:
         raise HTTPException(400, "text required")
     has_token = bool(os.getenv("LINE_CHANNEL_ACCESS_TOKEN"))
-    has_group = bool(os.getenv("LINE_GROUP_ID_EVERLY") or os.getenv("LINE_GROUP_ID"))
+    has_group = bool(os.getenv("LINE_GROUP_ID_TUBA") or os.getenv("LINE_GROUP_ID_EVERLY") or os.getenv("LINE_GROUP_ID"))
     if not (has_token and has_group):
-        raise HTTPException(503, "LINE not configured (set LINE_CHANNEL_ACCESS_TOKEN + LINE_GROUP_ID_EVERLY)")
+        raise HTTPException(503, "LINE not configured (set LINE_CHANNEL_ACCESS_TOKEN + LINE_GROUP_ID_TUBA)")
 
     from lib.notify import send_line_summary
     ok = send_line_summary(text)

@@ -8,14 +8,13 @@ def send_line_summary(message: str, image_paths: List[Path] = None) -> bool:
     """Push text + images to LINE OA group via Messaging API.
 
     Group resolution order:
-      1. LINE_GROUP_ID_TUBA   (TUBA-specific override — preferred)
-      2. LINE_GROUP_ID_EVERLY (legacy project override)
-      3. LINE_GROUP_ID        (legacy single-group fallback)
+      1. LINE_GROUP_ID_EVERLY (Everly-specific override)
+      2. LINE_GROUP_ID        (single-group fallback)
     """
     token = os.getenv("LINE_CHANNEL_ACCESS_TOKEN")
-    group_id = os.getenv("LINE_GROUP_ID_TUBA") or os.getenv("LINE_GROUP_ID_EVERLY") or os.getenv("LINE_GROUP_ID")
+    group_id = os.getenv("LINE_GROUP_ID_EVERLY") or os.getenv("LINE_GROUP_ID")
     if not token or not group_id:
-        print("  [SKIP] LINE not configured (LINE_CHANNEL_ACCESS_TOKEN / LINE_GROUP_ID_TUBA)")
+        print("  [SKIP] LINE not configured (LINE_CHANNEL_ACCESS_TOKEN / LINE_GROUP_ID_EVERLY)")
         return False
 
     messages = [{"type": "text", "text": message}]

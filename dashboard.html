@@ -812,6 +812,7 @@ const API_BASE = (() => {
 const STORAGE_KEY = 'everly-hub-v2';
 const STALE_STORAGE_KEYS = ['everly-hub-v1', 'everly-hub-v2-old'];
 const NOT_CONFIGURED_TEXT = '⚠️ ยังไม่ได้เชื่อมบัญชีโฆษณา Everly ที่ถูกต้อง — ต้องตั้งค่า FB_ACCESS_TOKEN + FB_ACCOUNT_EVERLY ก่อน ระบบจึงจะดึงข้อมูลจริง';
+const API_LOADING_TEXT = '⏳ กำลังเชื่อมข้อมูล Everly จาก Meta API... ถ้าเพิ่งเปิดหน้า รอสักครู่แล้วกด Refresh All Live';
 
 STALE_STORAGE_KEYS.forEach(key => {
   try { localStorage.removeItem(key); } catch(e) {}
@@ -1036,11 +1037,18 @@ function apiErrorText(error) {
 }
 
 async function applyConfigurationGate() {
-  try {
-    const res = await fetch(API_BASE + '/api/health', { cache:'no-store' });
-    const health = await res.json();
-    if (health.configured === true) return true;
-  } catch(e) {}
+  let healthError = '';
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const res = await fetch(API_BASE + '/api/health', { cache:'no-store' });
+      const health = await res.json();
+      if (health.configured === true) return true;
+      healthError = health && health.required_account_env ? NOT_CONFIGURED_TEXT : API_LOADING_TEXT;
+    } catch(e) {
+      healthError = API_LOADING_TEXT;
+    }
+    await new Promise(resolve => setTimeout(resolve, 900));
+  }
 
   ['ov','dy','tp','tr','rp'].forEach(prefix => setLive(prefix, false));
   const ovMeta = document.getElementById('ov-meta');
@@ -1048,11 +1056,11 @@ async function applyConfigurationGate() {
   const rpPeriod = document.getElementById('rp-period');
   const tpContent = document.getElementById('tp-content');
   const dyContent = document.getElementById('dy-content');
-  if (ovMeta) ovMeta.textContent = NOT_CONFIGURED_TEXT;
-  if (rpPreview) rpPreview.textContent = NOT_CONFIGURED_TEXT;
-  if (rpPeriod) rpPeriod.textContent = 'NOT CONFIGURED';
-  if (tpContent) tpContent.innerHTML = `<div class="card p-8 text-center" style="color:var(--dusty)">${NOT_CONFIGURED_TEXT}</div>`;
-  if (dyContent) dyContent.innerHTML = `<div class="card p-8 text-center" style="color:var(--dusty)">${NOT_CONFIGURED_TEXT}</div>`;
+  if (ovMeta) ovMeta.textContent = healthError;
+  if (rpPreview) rpPreview.textContent = healthError;
+  if (rpPeriod) rpPeriod.textContent = healthError === NOT_CONFIGURED_TEXT ? 'NOT CONFIGURED' : 'CONNECTING';
+  if (tpContent) tpContent.innerHTML = `<div class="card p-8 text-center" style="color:var(--dusty)">${healthError}</div>`;
+  if (dyContent) dyContent.innerHTML = `<div class="card p-8 text-center" style="color:var(--dusty)">${healthError}</div>`;
   return false;
 }
 function setLive(prefix, state) {
@@ -1668,7 +1676,7 @@ function renderAll() {
     const ok = await applyConfigurationGate();
     if (ok) { _loaded.overview = true; fetchOverview(); }
     else setLive('ov', false);
-  }, 200);
+  }, 900);
 
   // (Main tab switcher removed — Admin tab + Live Ticker stripped per user request)
 

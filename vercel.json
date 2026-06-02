@@ -1,15 +1,6 @@
 {
   "version": 2,
-  "builds": [
-    {
-      "src": "api/index.py",
-      "use": "@vercel/python"
-    }
-  ],
-  "routes": [
-    {
-      "source": "/(.*)",
-      "destination": "api/index.py"
-    }
-  ]
+  "builds": [{"src": "api/index.py", "use": "@vercel/python"}],
+  "routes": [{"source": "/(.*)", "destination": "api/index.py"}],
+  "crons": [{"path": "/api/everly/send-daily-line", "schedule": "0 17 * * *"}]
 }

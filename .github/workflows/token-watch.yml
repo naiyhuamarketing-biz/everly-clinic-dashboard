@@ -37,13 +37,13 @@ jobs:
 
           # Alert thresholds
           if [ "$VALID" != "True" ]; then
-            MSG="🚨 EVERLY · TOKEN INVALID%0AFB token reports is_valid=false. Dashboard will fail until token is refreshed.%0Ahttps://everly-clinic.onrender.com/api/everly/token-info"
+            MSG="🚨 Everly Clinic · TOKEN INVALID%0AFB token reports is_valid=false. Dashboard will fail until token is refreshed.%0Ahttps://everly-clinic.onrender.com/api/everly/token-info"
             ALERT=1
           elif [ "$DAYS" -lt 7 ]; then
-            MSG="🚨 EVERLY · TOKEN EXPIRES IN $DAYS DAYS%0Aต้อง refresh ทันที!%0Ahttps://everly-clinic.onrender.com/api/everly/token-info"
+            MSG="🚨 Everly Clinic · TOKEN EXPIRES IN $DAYS DAYS%0Aต้อง refresh ทันที!%0Ahttps://everly-clinic.onrender.com/api/everly/token-info"
             ALERT=1
           elif [ "$DAYS" -lt 14 ]; then
-            MSG="⚠️ EVERLY · TOKEN EXPIRES IN $DAYS DAYS%0Aควรเตรียม refresh เร็ว ๆ นี้%0Ahttps://everly-clinic.onrender.com/api/everly/token-info"
+            MSG="⚠️ Everly Clinic · TOKEN EXPIRES IN $DAYS DAYS%0Aควรเตรียม refresh เร็ว ๆ นี้%0Ahttps://everly-clinic.onrender.com/api/everly/token-info"
             ALERT=1
           else
             ALERT=0

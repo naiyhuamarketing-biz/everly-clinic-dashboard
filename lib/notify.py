@@ -8,8 +8,8 @@ def send_line_summary(message: str, image_paths: List[Path] = None) -> bool:
     """Push text + images to LINE OA group via Messaging API.
 
     Group resolution order:
-      1. LINE_GROUP_ID_EVERLY (clinic-specific override — preferred)
-      2. LINE_GROUP_ID         (legacy single-group fallback)
+      1. LINE_GROUP_ID_EVERLY (Everly-specific override)
+      2. LINE_GROUP_ID        (single-group fallback)
     """
     token = os.getenv("LINE_CHANNEL_ACCESS_TOKEN")
     group_id = os.getenv("LINE_GROUP_ID_EVERLY") or os.getenv("LINE_GROUP_ID")

@@ -61,7 +61,7 @@ jobs:
 
           if [ -n "$ALERTS" ]; then
             echo "alerts=true" >> "$GITHUB_OUTPUT"
-            BODY="🚨 EVERLY · HEALTH CHECK FAILED${ALERTS}%0A%0Ahttps://everly-clinic.onrender.com"
+            BODY="🚨 Everly Clinic · HEALTH CHECK FAILED${ALERTS}%0A%0Ahttps://everly-clinic.onrender.com"
             echo "$BODY"
             DECODED=$(printf '%s' "$BODY" | sed 's/%0A/\n/g')
             curl --fail --max-time 30 \

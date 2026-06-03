@@ -1,16 +1,27 @@
 name: Daily LINE notification
 
+# Fires every day at 00:00 Bangkok time (17:00 UTC).
+# Backup retries fire during the first hour after midnight. The API has a
+# per-date idempotency guard, so the backup run skips if the main run already
+# sent the report.
+# Free on GitHub Actions for public repos — runs on GitHub's servers,
+# does NOT depend on the user's Mac being on.
+#
+# Reliability features:
+#   - Pre-warm Render dyno before sending (avoids cold-start timeout)
+#   - 5-retry policy with exponential backoff
+#   - Concurrency lock so two cron firings don't double-send
 on:
   schedule:
-    - cron: '0 17 * * *'
-    - cron: '9 17 * * *'
-    - cron: '29 17 * * *'
-    - cron: '49 17 * * *'
-  workflow_dispatch:
+    - cron: '0 17 * * *'   # 00:00 BKK
+    - cron: '9 17 * * *'   # 00:09 BKK backup retry for previous day
+    - cron: '29 17 * * *'  # 00:29 BKK backup retry
+    - cron: '49 17 * * *'  # 00:49 BKK backup retry
+  workflow_dispatch:  # manual trigger from GitHub UI
 
 concurrency:
-  group: tuba-daily-line
-  cancel-in-progress: false
+  group: daily-line
+  cancel-in-progress: false  # let pending runs finish (don't lose a daily report)
 
 jobs:
   send:
@@ -26,27 +37,29 @@ jobs:
             [ "$CODE" = "200" ] && break
             sleep 10
           done
-      - name: Send TUBA daily LINE
+
+      - name: Send daily LINE
         run: |
           set -e
-          URL="https://everly-clinic.onrender.com/api/tuba/send-daily-line"
+          URL="https://everly-clinic.onrender.com/api/everly/send-daily-line"
           for i in 1 2 3 4 5; do
             echo "attempt $i ..."
             RESP=$(curl -s --max-time 60 -X POST "$URL" -H "Content-Type: application/json")
             echo "$RESP" | head -c 500
             echo
             if echo "$RESP" | grep -q '"outside_auto_send_window"'; then
-              echo "outside midnight send window"
+              echo "  ✗ outside midnight send window"
               exit 1
             fi
             if echo "$RESP" | grep -q '"ok":true' && echo "$RESP" | grep -q '"reason":"already_sent"'; then
-              echo "already sent by an earlier cron run"
+              echo "  ✓ already sent by an earlier cron run"
               exit 0
             fi
             if echo "$RESP" | grep -q '"ok":true' && ! echo "$RESP" | grep -q '"skipped":true'; then
-              echo "sent"
+              echo "  ✓ sent"
               exit 0
             fi
             sleep $((i * 15))
           done
+          echo "  ✗ all retries failed"
           exit 1

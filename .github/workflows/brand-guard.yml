@@ -1,4 +1,4 @@
-name: Everly brand guard
+name: TUBA brand guard
 
 on:
   push:
@@ -7,12 +7,12 @@ on:
   workflow_dispatch:
 
 jobs:
-  everly-only:
+  tuba-only:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Block non-Everly brand drift
+      - name: Block non-TUBA brand drift
         run: python scripts/brand_guard.py

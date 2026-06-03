@@ -101,6 +101,45 @@ def _mock_data_enabled() -> bool:
     return not _has_fb_token()
 
 
+def _fetch_ad_account_identity() -> dict:
+    """Best-effort live identity check for the locked Everly ad account."""
+    fallback = {
+        "account_name": None,
+        "account_name_live": False,
+        "account_name_matches_brand": None,
+        "account_identity_error": None,
+    }
+    if not _has_fb_token():
+        return {**fallback, "account_identity_error": "FB_ACCESS_TOKEN not set"}
+
+    def _load():
+        import requests
+
+        response = requests.get(
+            f"https://graph.facebook.com/v20.0/act_{ACCOUNT_ID}",
+            params={
+                "fields": "id,account_id,name",
+                "access_token": os.getenv("FB_ACCESS_TOKEN"),
+            },
+            timeout=8,
+        )
+        if response.status_code != 200:
+            raise RuntimeError(response.text[:220])
+        payload = response.json()
+        name = payload.get("name") or ""
+        return {
+            "account_name": name,
+            "account_name_live": True,
+            "account_name_matches_brand": "everly" in name.lower(),
+            "account_identity_error": None,
+        }
+
+    try:
+        return _cached(f"account-identity:{ACCOUNT_ID}:{signature()}", _load)
+    except Exception as e:
+        return {**fallback, "account_identity_error": str(e)[:220]}
+
+
 def _iter_days(since: date, until: date):
     n = (until - since).days
     for i in range(max(n, 0) + 1):
@@ -229,15 +268,8 @@ def _fetch_range(since: date, until: date):
 
 
 def _default_report_date() -> date:
-    """Pick the report date safely for scheduled jobs.
-
-    Normal daily send runs just after midnight BKK, so it reports yesterday:
-    the full day that just ended.
-    """
-    now = now_bkk()
-    if now.hour < 1:
-        return now.date() - timedelta(days=1)
-    return now.date()
+    """Daily reports default to the previous complete Bangkok day."""
+    return today_bkk() - timedelta(days=1)
 
 
 def _within_auto_send_window(now: Optional[datetime] = None) -> bool:
@@ -316,12 +348,14 @@ def _write_summary_snapshot(since: date, until: date, data: dict) -> None:
 def health():
     has_token = _has_fb_token()
     mock = _mock_data_enabled()
+    account_identity = _fetch_ad_account_identity()
     return {
         "ok": True,
         "brand": "Everly Clinic",
         "account_id": ACCOUNT_ID,
         "account_ids": [ACCOUNT_ID],
         "account_locked": ACCOUNT_ID == "1965556974211662",
+        **account_identity,
         "has_token": has_token,
         "configured": has_token,
         "required_account_env": "FB_ACCOUNT_EVERLY",
@@ -373,8 +407,15 @@ def everly_summary(
     avg_daily_spend = spend / n_days
 
     target_roas = 10.0
+    mock = _mock_data_enabled()
 
     response = {
+        "brand": "Everly Clinic",
+        "account_id": ACCOUNT_ID,
+        "account_locked": ACCOUNT_ID == "1965556974211662",
+        "mock": mock,
+        "mock_mode": mock,
+        "source": "mock" if mock else "meta_api",
         "since": s.isoformat(),
         "until": u.isoformat(),
         "n_days": len(days),
@@ -395,8 +436,7 @@ def everly_summary(
         "days": days,
         "fetched_at": now_bkk().isoformat(),
     }
-    if _mock_data_enabled():
-        response["mock"] = True
+    if mock:
         response["warning"] = "MOCK_MODE/no FB_ACCESS_TOKEN — showing deterministic local mock data"
     else:
         _write_summary_snapshot(s, u, response)
@@ -2108,8 +2148,8 @@ def send_daily_line(
 ):
     """Build daily report and push to LINE.
     Called by GitHub Actions at 00:00 BKK (17:00 UTC) every day.
-    `target` defaults to today (BKK). Token-protected via X-Cron-Secret header
-    if CRON_SECRET env var is set.
+    `target` defaults to the previous complete day around midnight BKK.
+    Token-protected via X-Cron-Secret header if CRON_SECRET env var is set.
     """
     # Optional hardening: if CRON_SECRET is set on Render, only scheduled jobs
     # that know the secret can trigger LINE sends.

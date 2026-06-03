@@ -8,31 +8,341 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+Thai:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
-    :root{--ink:#14251d;--muted:#728177;--paper:#f7fbf6;--panel:rgba(255,255,255,.84);--line:rgba(24,76,59,.14);--green:#2f7d62;--deep:#184c3b;--gold:#c8a96a;--shadow:0 24px 70px rgba(24,76,59,.14);--radius:18px}*{box-sizing:border-box}body{margin:0;color:var(--ink);font-family:Inter,"Noto Sans Thai",system-ui,sans-serif;background:radial-gradient(circle at 12% 0%,rgba(200,169,106,.22),transparent 26rem),radial-gradient(circle at 88% 12%,rgba(47,125,98,.16),transparent 24rem),linear-gradient(135deg,#eef7f0 0%,#fbf8f1 48%,#e5efe8 100%);min-height:100vh}.shell{width:min(1180px,calc(100% - 32px));margin:auto}.nav{position:sticky;top:0;z-index:10;background:rgba(247,251,246,.82);backdrop-filter:blur(18px);border-bottom:1px solid var(--line)}.nav-inner{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 0}.brand{display:flex;align-items:center;gap:12px}.logo{width:48px;height:48px;border-radius:50%;overflow:hidden;background:linear-gradient(135deg,var(--green),var(--deep));display:grid;place-items:center;box-shadow:var(--shadow)}.logo img{width:100%;height:100%;object-fit:cover}.brand h1{margin:0;font-size:18px}.brand p{margin:2px 0 0;color:var(--muted);font-size:12px}.status{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:13px}.dot{width:9px;height:9px;border-radius:50%;background:#16a34a;box-shadow:0 0 0 5px rgba(22,163,74,.14)}.hero{display:grid;grid-template-columns:1.2fr .8fr;gap:22px;padding:42px 0 24px}.eyebrow{color:var(--green);font-size:12px;font-weight:800;letter-spacing:.14em;text-transform:uppercase}.hero h2{font-size:clamp(38px,7vw,82px);line-height:.95;margin:10px 0 14px}.lead{font-size:16px;line-height:1.8;color:var(--muted);max-width:720px}.quick-panel,section{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow)}.quick-panel{padding:18px;align-self:end}.quick-panel label{font-size:12px;font-weight:800;color:var(--green);letter-spacing:.12em;text-transform:uppercase}.date-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:10px 0}input,textarea{width:100%;border:1px solid var(--line);border-radius:12px;padding:12px 13px;background:white;color:var(--ink);font:inherit}textarea{min-height:360px;line-height:1.75;resize:vertical}.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.btn{border:1px solid var(--line);background:white;color:var(--ink);border-radius:999px;padding:10px 14px;font-weight:700;cursor:pointer}.btn.primary{background:var(--deep);color:white;border-color:var(--deep)}.btn.slim{padding:8px 12px;font-size:12px}main{display:grid;gap:18px;padding:10px 0 40px}.section-head{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:18px 20px;border-bottom:1px solid var(--line)}.section-title{display:flex;align-items:center;gap:12px}.num{width:38px;height:38px;border-radius:50%;background:#e1efe7;color:var(--deep);display:grid;place-items:center;font-weight:800}.section-title h3{margin:0;font-size:20px}.section-title p{margin:2px 0 0;color:var(--muted);font-size:13px}.section-body{padding:20px}.grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.metric,.highlight{background:white;border:1px solid var(--line);border-radius:14px;padding:16px}.label{color:var(--muted);font-size:12px;font-weight:700;text-transform:uppercase}.value{font-size:28px;font-weight:800;margin-top:8px}.note,.muted{color:var(--muted);font-size:12px}.highlight-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.highlight strong{display:block;margin-bottom:6px}.highlight span{color:var(--muted);font-size:13px;line-height:1.6}.bar-label{font-size:12px;color:var(--muted);margin-bottom:5px}.bar-track{height:28px;background:#e7f0ea;border-radius:999px;overflow:hidden}.bar-fill{height:100%;background:linear-gradient(90deg,var(--green),var(--gold));color:white;font-size:12px;font-weight:700;display:flex;align-items:center;padding:0 10px;white-space:nowrap}.report-layout{display:grid;grid-template-columns:1fr 280px;gap:16px}.side-note{background:#eef7f0;border:1px solid var(--line);border-radius:14px;padding:16px;color:var(--muted);font-size:13px;line-height:1.8}.toast{position:fixed;right:18px;bottom:18px;background:var(--deep);color:white;padding:12px 16px;border-radius:14px;box-shadow:var(--shadow);opacity:0;transform:translateY(12px);transition:.2s}.toast.show{opacity:1;transform:translateY(0)}.error{background:#fff7f7;color:#9f1239;border:1px solid #fecdd3;border-radius:14px;padding:16px}@media(max-width:900px){.hero,.report-layout{grid-template-columns:1fr}.grid-4,.highlight-grid{grid-template-columns:1fr 1fr}}@media(max-width:560px){.grid-4,.highlight-grid,.date-row{grid-template-columns:1fr}.nav-inner{align-items:flex-start}.status{width:100%}.hero h2{font-size:42px}}
+    :root {
+      --ink: #14251d;
+      --muted: #728177;
+      --paper: #f7fbf6;
+      --panel: rgba(255, 255, 255, .88);
+      --line: rgba(24, 76, 59, .14);
+      --green: #2f7d62;
+      --deep: #184c3b;
+      --gold: #c8a96a;
+      --shadow: 0 20px 62px rgba(24, 76, 59, .12);
+      --radius: 8px;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { overflow-x: hidden; }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      font-family: Inter, "Noto Sans Thai", system-ui, sans-serif;
+      background:
+        radial-gradient(circle at 10% 0%, rgba(200, 169, 106, .20), transparent 26rem),
+        radial-gradient(circle at 86% 12%, rgba(47, 125, 98, .14), transparent 24rem),
+        linear-gradient(135deg, #eef7f0 0%, #fbf8f1 48%, #e5efe8 100%);
+      min-height: 100vh;
+    }
+
+    .shell { width: min(1180px, calc(100% - 32px)); margin: auto; }
+    .nav {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      background: rgba(247, 251, 246, .84);
+      backdrop-filter: blur(18px);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .nav-inner {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 16px;
+      padding: 14px 0;
+    }
+
+    .brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+    .brand > div:last-child { min-width: 0; }
+    .logo {
+      width: 48px;
+      height: 48px;
+      flex: 0 0 48px;
+      border-radius: 50%;
+      overflow: hidden;
+      background: linear-gradient(135deg, var(--green), var(--deep));
+      display: grid;
+      place-items: center;
+      box-shadow: var(--shadow);
+    }
+    .logo img { width: 100%; height: 100%; object-fit: cover; }
+    .brand h1 { margin: 0; font-size: 18px; line-height: 1.15; }
+    .brand p {
+      margin: 2px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+
+    .status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+      color: var(--muted);
+      font-size: 13px;
+      justify-self: end;
+      max-width: 420px;
+    }
+    .status span:last-child {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .dot {
+      width: 9px;
+      height: 9px;
+      flex: 0 0 9px;
+      border-radius: 50%;
+      background: #16a34a;
+      box-shadow: 0 0 0 5px rgba(22, 163, 74, .14);
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 462px;
+      gap: 22px;
+      padding: 30px 0 22px;
+      align-items: end;
+    }
+    .eyebrow {
+      color: var(--green);
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+    .hero h2 {
+      font-size: clamp(36px, 5.2vw, 62px);
+      line-height: 1.02;
+      margin: 9px 0 12px;
+      letter-spacing: 0;
+    }
+    .lead {
+      font-size: 15px;
+      line-height: 1.75;
+      color: var(--muted);
+      max-width: 720px;
+      margin: 0;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+    .account-id {
+      display: inline-block;
+      max-width: 100%;
+      color: var(--deep);
+      font-weight: 700;
+      overflow-wrap: anywhere;
+      word-break: break-all;
+      vertical-align: baseline;
+    }
+
+    .quick-panel, section {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+    section { overflow: hidden; }
+    .quick-panel { padding: 18px; align-self: end; }
+    .quick-panel label {
+      font-size: 12px;
+      font-weight: 800;
+      color: var(--green);
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+
+    .date-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin: 10px 0;
+    }
+    input, textarea {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 12px 13px;
+      background: white;
+      color: var(--ink);
+      font: inherit;
+      min-width: 0;
+    }
+    textarea {
+      min-height: 360px;
+      line-height: 1.75;
+      resize: vertical;
+      font-size: 14px;
+    }
+
+    .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+    .btn {
+      border: 1px solid var(--line);
+      background: white;
+      color: var(--ink);
+      border-radius: 999px;
+      padding: 10px 14px;
+      font-weight: 700;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .btn.primary { background: var(--deep); color: white; border-color: var(--deep); }
+    .btn.slim { padding: 8px 12px; font-size: 12px; }
+
+    main { display: grid; gap: 18px; padding: 10px 0 40px; }
+    .section-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+      padding: 18px 20px;
+      border-bottom: 1px solid var(--line);
+    }
+    .section-title {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+    }
+    .section-title > div:last-child { min-width: 0; }
+    .num {
+      width: 38px;
+      height: 38px;
+      flex: 0 0 38px;
+      border-radius: 50%;
+      background: #e1efe7;
+      color: var(--deep);
+      display: grid;
+      place-items: center;
+      font-weight: 800;
+    }
+    .section-title h3 { margin: 0; font-size: 20px; line-height: 1.2; }
+    .section-title p { margin: 2px 0 0; color: var(--muted); font-size: 13px; line-height: 1.45; }
+    .section-body { padding: 20px; }
+
+    .grid-4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+    .metric, .highlight {
+      background: white;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 16px;
+      min-width: 0;
+    }
+    .label { color: var(--muted); font-size: 12px; font-weight: 700; text-transform: uppercase; }
+    .value {
+      font-size: clamp(22px, 3vw, 28px);
+      font-weight: 800;
+      margin-top: 8px;
+      overflow-wrap: anywhere;
+    }
+    .note, .muted { color: var(--muted); font-size: 12px; line-height: 1.45; }
+
+    .highlight-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+    .highlight strong { display: block; margin-bottom: 6px; overflow-wrap: anywhere; }
+    .highlight span { color: var(--muted); font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
+    .bar-label { font-size: 12px; color: var(--muted); margin-bottom: 5px; }
+    .bar-track { height: 28px; background: #e7f0ea; border-radius: 999px; overflow: hidden; }
+    .bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--green), var(--gold));
+      color: white;
+      font-size: 12px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      padding: 0 10px;
+      white-space: nowrap;
+    }
+
+    .report-layout { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 16px; }
+    .side-note {
+      background: #eef7f0;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 16px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.8;
+    }
+    .toast {
+      position: fixed;
+      right: 18px;
+      bottom: 18px;
+      background: var(--deep);
+      color: white;
+      padding: 12px 16px;
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      opacity: 0;
+      transform: translateY(12px);
+      transition: .2s;
+      z-index: 20;
+    }
+    .toast.show { opacity: 1; transform: translateY(0); }
+    .error {
+      background: #fff7f7;
+      color: #9f1239;
+      border: 1px solid #fecdd3;
+      border-radius: var(--radius);
+      padding: 16px;
+    }
+
+    @media (max-width: 900px) {
+      .hero, .report-layout { grid-template-columns: 1fr; }
+      .grid-4, .highlight-grid { grid-template-columns: 1fr 1fr; }
+    }
+
+    @media (max-width: 560px) {
+      .shell { width: min(100% - 24px, 1180px); }
+      .nav-inner { grid-template-columns: 1fr; align-items: start; gap: 8px; padding: 10px 0; }
+      .brand { width: 100%; }
+      .logo { width: 44px; height: 44px; flex-basis: 44px; }
+      .status { width: 100%; justify-self: start; max-width: 100%; font-size: 12px; }
+      .hero { padding: 28px 0 18px; }
+      .hero h2 { font-size: 38px; line-height: 1.04; }
+      .lead { font-size: 14px; }
+      .grid-4, .highlight-grid, .date-row { grid-template-columns: 1fr; }
+      .section-head { align-items: flex-start; padding: 14px; gap: 10px; }
+      .section-title { align-items: flex-start; }
+      .section-title h3 { font-size: 18px; }
+      .section-head > .muted { width: 100%; margin-left: 50px; }
+      .section-head > .actions { width: 100%; margin-left: 50px !important; }
+      .section-body { padding: 14px; }
+      .btn { padding: 9px 13px; }
+      textarea { min-height: 330px; }
+    }
   </style>
 </head>
 <body>
   <nav class="nav"><div class="shell nav-inner"><div class="brand"><div class="logo"><img src="/assets/logos/everly.png" alt="Everly Clinic" onerror="this.outerHTML='<strong style=&quot;color:white;font-size:18px&quot;>E</strong>'"></div><div><h1>Everly Clinic</h1><p>Meta Ads Dashboard · Account 1965556974211662</p></div></div><div class="status" id="status"><span class="dot"></span><span>กำลังเช็กระบบ Everly Clinic</span></div></div></nav>
-  <header class="shell hero"><div><div class="eyebrow">Everly Clinic Only · Today Default</div><h2>Daily Ads Report</h2><p class="lead">แดชบอร์ดนี้ล็อกเฉพาะแบรนด์ Everly Clinic และบัญชีโฆษณา 1965556974211662 เท่านั้น เปิดลิงก์เมื่อไหร่ข้อมูลเริ่มต้นจะเป็น “วันนี้” เสมอ</p></div><div class="quick-panel"><label>Date Range</label><div class="date-row"><input id="since" type="date"><input id="until" type="date"></div><div class="actions"><button class="btn slim" data-preset="today">วันนี้</button><button class="btn slim" data-preset="7d">7 วัน</button><button class="btn slim" data-preset="month">เดือนนี้</button><button class="btn primary" id="refresh">Refresh Live</button></div></div></header>
+  <header class="shell hero"><div><div class="eyebrow">Everly Clinic Only · Today Default</div><h2>Daily Ads Report</h2><p class="lead">แดชบอร์ดนี้ล็อกเฉพาะแบรนด์ Everly Clinic เท่านั้น<br>บัญชีโฆษณา <span class="account-id">1965556974211662</span> · ค่าเริ่มต้นเป็น “วันนี้”</p></div><div class="quick-panel"><label>Date Range</label><div class="date-row"><input id="since" type="date"><input id="until" type="date"></div><div class="actions"><button class="btn slim" data-preset="today">วันนี้</button><button class="btn slim" data-preset="7d">7 วัน</button><button class="btn slim" data-preset="month">เดือนนี้</button><button class="btn primary" id="refresh">Refresh Live</button></div></div></header>
   <main class="shell">
     <section><div class="section-head"><div class="section-title"><div class="num">01</div><div><h3>Performance Overview</h3><p>ภาพรวมค่าใช้จ่ายและผลลัพธ์ของช่วงวันที่เลือก</p></div></div><span class="muted" id="rangeLabel">วันนี้</span></div><div class="section-body"><div class="grid-4" id="metrics"></div></div></section>
     <section><div class="section-head"><div class="section-title"><div class="num">02</div><div><h3>Top Highlights</h3><p>แคมเปญและชิ้นงานที่ควรดูเป็นพิเศษ</p></div></div></div><div class="section-body"><div class="highlight-grid" id="highlightGrid"></div></div></section>
-    <section><div class="section-head"><div class="section-title"><div class="num">03</div><div><h3>Performance Trend</h3><p>แนวโน้มรายวันของ spend และ inbox</p></div></div></div><div class="section-body"><div id="trendChart"></div></div></section>
-    <section><div class="section-head"><div class="section-title"><div class="num">04</div><div><h3>Daily Report</h3><p>ข้อความพร้อมส่ง LINE หลังบ้าน Everly Clinic</p></div></div><div class="actions" style="margin:0"><button class="btn" id="copyReport">Copy</button><button class="btn primary" id="sendLine">Send LINE</button></div></div><div class="section-body"><div class="report-layout"><textarea id="reportText" spellcheck="false">กำลังเตรียมรายงาน...</textarea><div class="side-note"><strong style="color:var(--ink)">LINE Daily Report</strong><br>ระบบจัดข้อความเป็นบรรทัดอ่านง่าย และ endpoint cron กันส่งซ้ำตามวันที่รายงาน<br><br>Auto schedule: ทุกวัน 00:00 เวลาไทย</div></div></div></section>
+    <section><div class="section-head"><div class="section-title"><div class="num">03</div><div><h3>Performance Trend</h3><p>แนวโน้มรายวันของค่าใช้จ่ายและคนทัก</p></div></div></div><div class="section-body"><div id="trendChart"></div></div></section>
+    <section><div class="section-head"><div class="section-title"><div class="num">04</div><div><h3>Daily Report</h3><p id="reportLabel">ค่าเริ่มต้นเป็นรายงานเมื่อวานเต็มวัน</p></div></div><div class="actions" style="margin:0"><button class="btn" id="copyReport">Copy</button><button class="btn primary" id="sendLine">Send LINE</button></div></div><div class="section-body"><div class="report-layout"><textarea id="reportText" spellcheck="false">กำลังเตรียมรายงาน...</textarea><div class="side-note"><strong style="color:var(--ink)">LINE Daily Report</strong><br>รอบอัตโนมัติ 00:00 น. จะส่งรายงานของเมื่อวานทั้งวัน และสะสมตั้งแต่วันที่ 1 ถึงวันรายงาน<br><br>ระบบมีตัวกันส่งซ้ำตามวันที่รายงาน</div></div></div></section>
   </main><div class="toast" id="toast"></div>
 <script>
 const ACCOUNT_ID='1965556974211662'; const API='/api/everly'; const $=id=>document.getElementById(id);
-function isoToday(){const now=new Date();const bkk=new Date(now.toLocaleString('en-US',{timeZone:'Asia/Bangkok'}));return `${bkk.getFullYear()}-${String(bkk.getMonth()+1).padStart(2,'0')}-${String(bkk.getDate()).padStart(2,'0')}`}
-function monthStart(){return isoToday().slice(0,8)+'01'} function daysAgo(n){const d=new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Bangkok'}));d.setDate(d.getDate()-n);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`}
+function bkkDate(){return new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Bangkok'}))}
+function isoFromDate(d){return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`}
+function isoToday(){return isoFromDate(bkkDate())}
+function monthStart(){return isoToday().slice(0,8)+'01'} function daysAgo(n){const d=bkkDate();d.setDate(d.getDate()-n);return isoFromDate(d)}
 function fmtMoney(n){return '฿'+Number(n||0).toLocaleString('th-TH',{maximumFractionDigits:2})} function fmtNum(n){return Number(n||0).toLocaleString('th-TH')} function toast(t){const el=$('toast');el.textContent=t;el.classList.add('show');setTimeout(()=>el.classList.remove('show'),2600)}
 async function apiGet(url){const r=await fetch(url);const j=await r.json().catch(()=>({detail:r.statusText}));if(!r.ok)throw new Error(j.detail||r.statusText);return j} async function apiPost(url,payload){const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload||{})});const j=await r.json().catch(()=>({detail:r.statusText}));if(!r.ok||j.ok===false)throw new Error(j.detail||r.statusText);return j}
 function setPreset(p){const today=isoToday();$('until').value=today;$('since').value=p==='month'?monthStart():p==='7d'?daysAgo(6):today;loadDashboard()}
 function signedMoney(n){const v=Number(n||0);return `${v>0?'+':''}${fmtMoney(v)}`}
 function setLoading(){ $('metrics').innerHTML=['ใช้เงิน','ยอดขาย','กำไร/ขาดทุน','คนทัก','เฉลี่ยต่อคนทัก','ROAS'].map(x=>`<div class="metric"><div class="label">${x}</div><div class="value">...</div><div class="note">กำลังโหลดข้อมูล Everly Clinic</div></div>`).join(''); $('highlightGrid').innerHTML='<div class="highlight"><strong>กำลังโหลด</strong><span>ระบบกำลังดึงข้อมูลบัญชี Everly Clinic เท่านั้น</span></div>'; $('trendChart').innerHTML='<div class="muted">กำลังโหลดกราฟ...</div>' }
 function renderMetrics(t,m){const spend=Number(t.spend??t.spent??0), revenue=Number(t.revenue||0), net=Number.isFinite(Number(t.net))?Number(t.net):(revenue-spend), roas=spend>0?revenue/spend:0;const cards=[['ใช้เงิน',fmtMoney(spend),m.source==='meta_api'?'ดึงสดจาก Meta API':'ข้อมูลสำรอง / local'],['ยอดขาย',fmtMoney(revenue),'ยอดขายที่ระบบอ่านได้ในช่วงวันที่เลือก'],['กำไร/ขาดทุน',signedMoney(net),'ยอดขายลบค่าโฆษณา'],['คนทัก',fmtNum(t.result),'ผลลัพธ์จากบัญชี Everly เท่านั้น'],['เฉลี่ยต่อคนทัก',fmtMoney(t.cost_per_result),'ต้นทุนต่อคนทัก'],['ROAS',`${Number(t.roas||roas||0).toFixed(2)}x`,'ยอดขายเทียบกับค่าโฆษณา']];$('metrics').innerHTML=cards.map(([l,v,n])=>`<div class="metric"><div class="label">${l}</div><div class="value">${v}</div><div class="note">${n}</div></div>`).join('')}
-function renderHighlights(data){const t=data.totals||{}, ads=data.top_ads||[], best=ads[0]; const net=Number.isFinite(Number(t.net))?Number(t.net):(Number(t.revenue||0)-Number(t.spend||0));const cards=[{title:best?`Top Ad: ${best.ad_name}`:'ยังไม่มี Top Ad',detail:best?`${best.campaign_name}<br>ใช้เงิน ${fmtMoney(best.spent)} · คนทัก ${fmtNum(best.result)} · เฉลี่ย ${fmtMoney(best.cost_per_result)}`:'วันนี้ยังไม่มีข้อมูลแอดที่มีค่าใช้จ่าย'},{title:`ยอดขาย ${fmtMoney(t.revenue)}`,detail:`กำไร/ขาดทุน ${signedMoney(net)}`},{title:'Everly Only',detail:`Dashboard นี้ใช้เฉพาะ Everly Clinic Ad Account ${ACCOUNT_ID}`}];$('highlightGrid').innerHTML=cards.map(x=>`<div class="highlight"><strong>${x.title}</strong><span>${x.detail}</span></div>`).join('')}
+function renderHighlights(data,ads,topError){const t=data.totals||{}, best=(ads||[])[0]; const net=Number.isFinite(Number(t.net))?Number(t.net):(Number(t.revenue||0)-Number(t.spend||0));const bestName=best&&(best.campaign||best.ad_name||best.campaign_name);const cards=[{title:bestName?`Top Ad: ${bestName}`:'ยังไม่มี Top Ad',detail:bestName?`ใช้เงิน ${fmtMoney(best.spent)} · คนทัก ${fmtNum(best.result)} · เฉลี่ย ${fmtMoney(best.cost_per_result)}`:(topError?`โหลด Top Ads ไม่สำเร็จ: ${topError}`:'วันนี้ยังไม่มีข้อมูลแอดที่มีค่าใช้จ่าย')},{title:`ยอดขาย ${fmtMoney(t.revenue)}`,detail:`กำไร/ขาดทุน ${signedMoney(net)}`},{title:'Everly Only',detail:`Dashboard นี้ใช้เฉพาะ Everly Clinic Ad Account ${ACCOUNT_ID}`}];$('highlightGrid').innerHTML=cards.map(x=>`<div class="highlight"><strong>${x.title}</strong><span>${x.detail}</span></div>`).join('')}
 function renderTrend(days){if(!days||!days.length){$('trendChart').innerHTML='<div class="muted">ยังไม่มีข้อมูลรายวัน</div>';return} const max=Math.max(...days.map(d=>Number(d.spend||0)),1);$('trendChart').innerHTML=days.map(d=>{const pct=Math.max(4,Math.round(Number(d.spend||0)/max*100));const label=new Date(d.date+'T00:00:00').toLocaleDateString('th-TH',{day:'2-digit',month:'short'});return `<div class="chart" style="margin-bottom:10px"><div class="bar-label">${label}</div><div class="bar-track"><div class="bar-fill" style="width:${pct}%">${fmtMoney(d.spend)} · ${fmtNum(d.result)} คนทัก</div></div></div>`}).join('')}
-async function loadDailyReport(){const target=$('until').value||isoToday();try{const r=await apiGet(`${API}/daily-text?target=${encodeURIComponent(target)}`);$('reportText').value=r.text}catch(e){$('reportText').value=`Everly Clinic — DAILY REPORT\n\nโหลดรายงานไม่สำเร็จ\n${e.message}`}}
-async function loadDashboard(){setLoading();const since=$('since').value||isoToday(), until=$('until').value||since;$('rangeLabel').textContent=since===until?`วันนี้: ${until}`:`${since} ถึง ${until}`;try{const [h,s]=await Promise.all([apiGet(`${API}/health`),apiGet(`${API}/summary?since=${encodeURIComponent(since)}&until=${encodeURIComponent(until)}&refresh=true`)]);$('status').innerHTML=`<span class="dot"></span><span>${h.mock_mode?'LOCAL MOCK / FALLBACK':'LIVE FROM META'} · Everly Clinic ${ACCOUNT_ID}</span>`;renderMetrics(s.totals||{},s);renderHighlights(s);renderTrend(s.days||[])}catch(e){$('status').innerHTML=`<span class="dot" style="background:#8e1f2d"></span><span>ระบบมีปัญหา: ${e.message}</span>`;$('metrics').innerHTML=`<div class="error">โหลดข้อมูล Everly Clinic ไม่สำเร็จ<br>${e.message}</div>`;$('highlightGrid').innerHTML='';$('trendChart').innerHTML=''}loadDailyReport()}
+function reportTargetForSelection(){const today=isoToday(), since=$('since').value||today, until=$('until').value||since;return since===today&&until===today?null:until}
+async function loadDailyReport(){const target=reportTargetForSelection();try{const url=target?`${API}/daily-text?target=${encodeURIComponent(target)}`:`${API}/daily-text`;const r=await apiGet(url);$('reportText').value=r.text;$('reportLabel').textContent=`รอบรายงาน: ${r.date} · เมื่อวานเต็มวัน / หรือวันที่เลือก`}catch(e){$('reportLabel').textContent='โหลด Daily Report ไม่สำเร็จ';$('reportText').value=`Everly Clinic — DAILY REPORT\n\nโหลดรายงานไม่สำเร็จ\n${e.message}`}}
+async function loadDashboard(){setLoading();const since=$('since').value||isoToday(), until=$('until').value||since;$('rangeLabel').textContent=since===until?`วันนี้: ${until}`:`${since} ถึง ${until}`;try{const [h,s,top]=await Promise.all([apiGet(`${API}/health`),apiGet(`${API}/summary?since=${encodeURIComponent(since)}&until=${encodeURIComponent(until)}&refresh=true`),apiGet(`${API}/top-ads-range?since=${encodeURIComponent(since)}&until=${encodeURIComponent(until)}&limit=3`).catch(e=>({ads:[],error:e.message}))]);const accountName=h.account_name||'Everly Clinic';$('status').innerHTML=`<span class="dot"></span><span>${h.mock_mode?'LOCAL MOCK / FALLBACK':'LIVE FROM META'} · ${accountName} · ${ACCOUNT_ID}</span>`;renderMetrics(s.totals||{},s);renderHighlights(s,top.ads||[],top.error);renderTrend(s.days||[])}catch(e){$('status').innerHTML=`<span class="dot" style="background:#8e1f2d"></span><span>ระบบมีปัญหา: ${e.message}</span>`;$('metrics').innerHTML=`<div class="error">โหลดข้อมูล Everly Clinic ไม่สำเร็จ<br>${e.message}</div>`;$('highlightGrid').innerHTML='';$('trendChart').innerHTML=''}loadDailyReport()}
 document.querySelectorAll('[data-preset]').forEach(b=>b.addEventListener('click',()=>setPreset(b.dataset.preset)));$('refresh').addEventListener('click',loadDashboard);$('since').addEventListener('change',loadDashboard);$('until').addEventListener('change',loadDashboard);$('copyReport').addEventListener('click',async()=>{await navigator.clipboard.writeText($('reportText').value);toast('Copy Daily Report แล้ว')});$('sendLine').addEventListener('click',async()=>{try{await apiPost('/api/line/send',{text:$('reportText').value});toast('ส่ง LINE หลังบ้าน Everly Clinic แล้ว')}catch(e){toast(`ส่ง LINE ไม่สำเร็จ: ${e.message}`)}});$('since').value=isoToday();$('until').value=isoToday();loadDashboard();
 </script></body></html>

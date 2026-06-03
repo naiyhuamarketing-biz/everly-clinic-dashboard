@@ -33,8 +33,7 @@ jobs:
           if [ -n "$ALERTS" ]; then
             MSG="TUBA · HEALTH CHECK FAILED${ALERTS}%0A%0Ahttps://everly-clinic.onrender.com/dashboard"
             DECODED=$(printf '%s' "$MSG" | sed 's/%0A/\n/g')
-            echo "LINE alert disabled for safety. Admin-only alert text:"
-            printf '%s\n' "$DECODED"
+            curl --max-time 30 -X POST "https://everly-clinic.onrender.com/api/line/send" -H "Content-Type: application/json" -d "$(python3 -c "import json,sys; print(json.dumps({'text': sys.argv[1]}))" "$DECODED")" || true
             exit 1
           fi
           echo "TUBA systems healthy"

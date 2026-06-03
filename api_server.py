@@ -19,7 +19,6 @@ BRAND_NAME = "TUBA"
 AD_ACCOUNT_ID = "1979003202592442"
 AD_ACCOUNT_ENV = "FB_ACCOUNT_TUBA"
 LINE_GROUP_ENV = "LINE_GROUP_ID_TUBA"
-LINE_PUSH_ENABLED_ENV = "ALLOW_TUBA_LINE_PUSH"
 BKK = timezone(timedelta(hours=7))
 SENT_STATE_FILE = Path(os.getenv("SENT_STATE_FILE", "/tmp/tuba-line-sent.json"))
 
@@ -61,15 +60,11 @@ def mock_mode() -> bool:
 
 
 def line_group_id() -> str:
-    return os.getenv(LINE_GROUP_ENV) or ""
-
-
-def line_push_enabled() -> bool:
-    return os.getenv(LINE_PUSH_ENABLED_ENV, "").lower() in {"1", "true", "yes", "on"}
+    return os.getenv(LINE_GROUP_ENV) or os.getenv("LINE_GROUP_ID") or ""
 
 
 def line_configured() -> bool:
-    return bool(line_push_enabled() and os.getenv("LINE_CHANNEL_ACCESS_TOKEN") and line_group_id())
+    return bool(os.getenv("LINE_CHANNEL_ACCESS_TOKEN") and line_group_id())
 
 
 def action_count(actions: Any) -> int:
@@ -267,8 +262,6 @@ def daily_text(target: date) -> str:
 def send_line_message(text: str) -> Dict[str, Any]:
     token = os.getenv("LINE_CHANNEL_ACCESS_TOKEN", "")
     group = line_group_id()
-    if not line_push_enabled():
-        return {"ok": False, "configured": False, "error": f"LINE push disabled (set {LINE_PUSH_ENABLED_ENV}=true after verifying the TUBA group)"}
     if not token or not group:
         return {"ok": False, "configured": False, "error": f"Missing LINE_CHANNEL_ACCESS_TOKEN or {LINE_GROUP_ENV}"}
     res = requests.post(
@@ -405,8 +398,6 @@ def line_status() -> Dict[str, Any]:
         "brand": BRAND_NAME,
         "configured": line_configured(),
         "line_group_env": LINE_GROUP_ENV,
-        "line_push_enabled_env": LINE_PUSH_ENABLED_ENV,
-        "line_push_enabled": line_push_enabled(),
         "group_id_present": bool(group),
         "token_present": bool(os.getenv("LINE_CHANNEL_ACCESS_TOKEN")),
     }

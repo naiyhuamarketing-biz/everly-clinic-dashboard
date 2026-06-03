@@ -2,16 +2,13 @@ import os
 import requests
 
 LINE_GROUP_ENV = "LINE_GROUP_ID_TUBA"
-LINE_PUSH_ENABLED_ENV = "ALLOW_TUBA_LINE_PUSH"
 
 def line_target() -> str:
-    return os.getenv(LINE_GROUP_ENV) or ""
+    return os.getenv(LINE_GROUP_ENV) or os.getenv("LINE_GROUP_ID") or ""
 
 def send_line(text: str) -> dict:
     token = os.getenv("LINE_CHANNEL_ACCESS_TOKEN", "")
     group_id = line_target()
-    if os.getenv(LINE_PUSH_ENABLED_ENV, "").lower() not in {"1", "true", "yes", "on"}:
-        return {"ok": False, "configured": False, "error": f"LINE push disabled (set {LINE_PUSH_ENABLED_ENV}=true after verifying the TUBA group)"}
     if not token or not group_id:
         return {"ok": False, "configured": False, "error": f"Missing LINE_CHANNEL_ACCESS_TOKEN or {LINE_GROUP_ENV}"}
     response = requests.post(

@@ -15,6 +15,7 @@ EVERLY_REQUIRED = {
     "config.py": ["Everly Clinic", "1965556974211662", "FB_ACCOUNT_EVERLY"],
     "lib/meta_loader.py": ["Everly Clinic", "1965556974211662", "FB_ACCOUNT_EVERLY"],
     "lib/notify.py": ["LINE_GROUP_ID_EVERLY"],
+    "api/index.py": ["from api_server import app"],
     "render.yaml": ["Everly Clinic", "FB_ACCOUNT_EVERLY", "LINE_GROUP_ID_EVERLY"],
     "vercel.json": ["/api/everly/send-daily-line"],
     ".github/workflows/daily-line.yml": ["/api/everly/send-daily-line"],
@@ -42,6 +43,14 @@ FORBIDDEN = [
     "tuba-clinic",
 ]
 
+FORBIDDEN_PATHS = [
+    "yiaoya_api.py",
+    "tuba_api.py",
+    "assets/logos/yiaoya.svg",
+    "assets/logos/tuba.svg",
+    "assets/logos/tuba-brand.jpg",
+]
+
 
 def main() -> int:
     errors: list[str] = []
@@ -62,6 +71,10 @@ def main() -> int:
     logo_path = ROOT / "assets" / "logos" / "everly.png"
     if not logo_path.exists():
         errors.append("missing Everly logo: assets/logos/everly.png")
+
+    for relative in FORBIDDEN_PATHS:
+        if (ROOT / relative).exists():
+            errors.append(f"forbidden non-Everly file exists: {relative}")
 
     if errors:
         print("Brand guard failed: this repo must stay Everly-only.")

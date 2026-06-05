@@ -2230,24 +2230,31 @@ def send_state():
 
 
 # ── Dashboard routes (HTML at same origin as API) ─────────────
+NO_CACHE_HEADERS = {
+    "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+    "Pragma": "no-cache",
+    "Expires": "0",
+}
+
+
 @app.head("/")
 def root_dashboard_head():
-    return Response(status_code=200, media_type="text/html")
+    return Response(status_code=200, media_type="text/html", headers=NO_CACHE_HEADERS)
 
 
 @app.get("/")
 def root_dashboard():
-    return FileResponse(DASHBOARD_FILE)
+    return FileResponse(DASHBOARD_FILE, headers=NO_CACHE_HEADERS)
 
 
 @app.head("/dashboard")
 def dashboard_alias_head():
-    return Response(status_code=200, media_type="text/html")
+    return Response(status_code=200, media_type="text/html", headers=NO_CACHE_HEADERS)
 
 
 @app.get("/dashboard")
 def dashboard_alias():
-    return FileResponse(DASHBOARD_FILE)
+    return FileResponse(DASHBOARD_FILE, headers=NO_CACHE_HEADERS)
 
 
 if __name__ == "__main__":

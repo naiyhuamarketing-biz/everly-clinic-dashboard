@@ -13,6 +13,7 @@ import time
 import re
 import random
 import threading
+import uuid
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
@@ -328,10 +329,15 @@ def _mark_sent(report_date: date, preview: str) -> None:
     # Keep the file tiny: only retain the latest 45 report markers.
     state[report_date.isoformat()] = {
         "sent_at": now_bkk().isoformat(),
+        "line_retry_key": _daily_line_retry_key(report_date),
         "preview": preview[:180],
     }
     items = sorted(state.items())[-45:]
     _write_sent_state(dict(items))
+
+
+def _daily_line_retry_key(report_date: date) -> str:
+    return str(uuid.uuid5(uuid.NAMESPACE_URL, f"everly-clinic-daily-line:{report_date.isoformat()}"))
 
 
 def _summary_snapshot_path(since: date, until: date) -> Path:
@@ -2051,21 +2057,21 @@ def admin_faq(
 def keepalive():
     """Lightweight ping that:
       1. Confirms the Render service is awake
-      2. AUTO-TRIGGERS daily LINE in the 00:00-08:59 BKK window if not sent
-         — this gives LINE several chances to go out at midnight,
+      2. AUTO-TRIGGERS daily LINE in the 23:55-08:59 BKK window if not sent
+         — this gives LINE several chances to go out around midnight,
          without touching Meta API on every ping.
     """
-    # Auto-LINE check: send the completed previous-day report at midnight BKK.
+    # Auto-LINE check: send the correct report date for the cloud-cron window.
     line_status = "not_triggered"
     line_reason = ""
     try:
         now = now_bkk()
-        # Trigger window: 00:00 BKK → 08:59 BKK.
+        # Trigger window: 23:55 BKK → 08:59 BKK.
         # GitHub schedule delays are common, so delayed early-morning runs
         # should still deliver the previous complete day's report.
-        within_send_window = _within_auto_send_window(now)
+        within_send_window = _within_cron_send_window(now)
         if within_send_window:
-            target_date = _default_report_date()
+            target_date = _cron_report_date(now)
             with SEND_DAILY_LINE_LOCK:
                 if not _already_sent(target_date):
                     # Inline call — avoid HTTP round-trip
@@ -2075,7 +2081,7 @@ def keepalive():
                         try:
                             text = _build_daily_text(target_date)
                             from lib.notify import send_line_summary
-                            if send_line_summary(text):
+                            if send_line_summary(text, retry_key=_daily_line_retry_key(target_date)):
                                 _mark_sent(target_date, text)
                                 line_status = "sent"
                                 line_reason = f"auto-triggered from keepalive · date={target_date.isoformat()}"
@@ -2090,7 +2096,7 @@ def keepalive():
                     line_status = "already_sent_today"
         else:
             line_status = "outside_window"
-            line_reason = f"hour={now.hour} min={now.minute} · window: 00:00-08:59"
+            line_reason = f"hour={now.hour} min={now.minute} · window: 23:55-08:59"
     except Exception as e:
         line_status = "error"
         line_reason = str(e)[:100]
@@ -2431,7 +2437,7 @@ def send_daily_line(
             raise HTTPException(502, f"Failed to build report: {e}")
 
         from lib.notify import send_line_summary
-        ok = send_line_summary(text)
+        ok = send_line_summary(text, retry_key=_daily_line_retry_key(d))
         if not ok:
             raise HTTPException(502, "LINE push failed (check server logs)")
         _mark_sent(d, text)
@@ -2480,6 +2486,7 @@ def cron_run(
             "dry_run": True,
             "daily_report": "would_send" if (force_daily or (within_window and not existing)) else "would_skip",
             "date": d.isoformat(),
+            "line_retry_key": _daily_line_retry_key(d),
             "now_bkk": now.isoformat(),
             "within_window": within_window,
             "already_sent": bool(existing),
@@ -2520,7 +2527,7 @@ def cron_run(
             raise HTTPException(502, f"Failed to build report: {e}")
 
         from lib.notify import send_line_summary
-        ok = send_line_summary(text)
+        ok = send_line_summary(text, retry_key=_daily_line_retry_key(d))
         if not ok:
             raise HTTPException(502, "LINE push failed (check server logs)")
         _mark_sent(d, text)

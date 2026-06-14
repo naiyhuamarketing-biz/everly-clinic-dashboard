@@ -59,7 +59,7 @@ jobs:
               echo "  ✓ already sent by an earlier cron run"
               exit 0
             fi
-            if echo "$RESP" | grep -q '"ok":true' && ! echo "$RESP" | grep -q '"skipped":true'; then
+            if echo "$RESP" | grep -q '"ok":true' && echo "$RESP" | grep -q '"daily_report":"sent"'; then
               echo "  ✓ sent"
               exit 0
             fi

@@ -1,10 +1,10 @@
 import os
 import requests
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 
-def send_line_summary(message: str, image_paths: List[Path] = None) -> bool:
+def send_line_summary(message: str, image_paths: List[Path] = None, retry_key: Optional[str] = None) -> bool:
     """Push text + images to LINE OA group via Messaging API.
 
     Group resolution order:
@@ -23,14 +23,21 @@ def send_line_summary(message: str, image_paths: List[Path] = None) -> bool:
         if url:
             messages.append({"type": "image", "originalContentUrl": url, "previewImageUrl": url})
 
+    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+    if retry_key:
+        headers["X-Line-Retry-Key"] = retry_key
+
     r = requests.post(
         "https://api.line.me/v2/bot/message/push",
-        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+        headers=headers,
         json={"to": group_id, "messages": messages[:5]},
         timeout=15,
     )
     if r.status_code == 200:
         print(f"  ✓ LINE sent ({len(messages)} parts)")
+        return True
+    if r.status_code == 409 and retry_key:
+        print("  ✓ LINE duplicate blocked by retry key")
         return True
     print(f"  ✗ LINE failed [{r.status_code}]: {r.text}")
     return False

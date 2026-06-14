@@ -59,6 +59,18 @@ jobs:
             ALERTS="$ALERTS%0A• LINE config drift"
           fi
 
+          # 4. Daily report guard. During the report window, dry-run tells us
+          # whether the previous report is still missing. If missing, rescue it.
+          D=$(curl -s --max-time 60 "https://everly-clinic.onrender.com/api/cron/run?dry_run=true")
+          echo "$D"
+          if echo "$D" | grep -q '"within_window":true' && echo "$D" | grep -q '"already_sent":false'; then
+            R=$(curl -s --max-time 90 -X POST "https://everly-clinic.onrender.com/api/cron/run")
+            echo "$R"
+            if ! echo "$R" | grep -Eq '"daily_report":"(sent|already_sent)"'; then
+              ALERTS="$ALERTS%0A• Daily LINE report missing and rescue failed"
+            fi
+          fi
+
           if [ -n "$ALERTS" ]; then
             echo "alerts=true" >> "$GITHUB_OUTPUT"
             BODY="🚨 Everly Clinic · HEALTH CHECK FAILED${ALERTS}%0A%0Ahttps://everly-clinic.onrender.com"

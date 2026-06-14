@@ -1,6 +1,6 @@
 name: Daily LINE notification
 
-# Fires every day around midnight Bangkok time (17:00 UTC).
+# Fires every day at 23:59 Bangkok time (16:59 UTC), like Glow.
 # GitHub can delay/drop scheduled jobs near the top of the hour, so the
 # midnight hour retries every 5 minutes. The API has a per-date idempotency
 # guard, so backup runs skip if an earlier run already sent the report.
@@ -13,6 +13,7 @@ name: Daily LINE notification
 #   - Concurrency lock so two cron firings don't double-send
 on:
   schedule:
+    - cron: '59 16 * * *' # 23:59 BKK primary send for the day that just ended
     - cron: '*/5 17 * * *' # 00:00-00:55 BKK retries every 5 minutes
     - cron: '20 18 * * *'  # 01:20 BKK backup for GitHub queue delay
     - cron: '20 19 * * *'  # 02:20 BKK backup for GitHub queue delay
@@ -44,17 +45,17 @@ jobs:
       - name: Send daily LINE
         run: |
           set -e
-          URL="https://everly-clinic.onrender.com/api/everly/send-daily-line"
+          URL="https://everly-clinic.onrender.com/api/cron/run"
           for i in 1 2 3 4 5; do
             echo "attempt $i ..."
             RESP=$(curl -s --max-time 60 -X POST "$URL" -H "Content-Type: application/json")
             echo "$RESP" | head -c 500
             echo
-            if echo "$RESP" | grep -q '"outside_auto_send_window"'; then
+            if echo "$RESP" | grep -q '"outside_daily_send_window"'; then
               echo "  ✗ outside midnight send window"
               exit 1
             fi
-            if echo "$RESP" | grep -q '"ok":true' && echo "$RESP" | grep -q '"reason":"already_sent"'; then
+            if echo "$RESP" | grep -q '"ok":true' && echo "$RESP" | grep -q '"daily_report":"already_sent"'; then
               echo "  ✓ already sent by an earlier cron run"
               exit 0
             fi

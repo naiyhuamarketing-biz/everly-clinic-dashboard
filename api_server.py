@@ -283,6 +283,24 @@ def _within_auto_send_window(now: Optional[datetime] = None) -> bool:
     return 0 <= now.hour <= 8
 
 
+def _cron_report_date(now: Optional[datetime] = None) -> date:
+    """Report date for cloud cron runs.
+
+    A 23:59 BKK cron should report the day that is just ending. Backup runs
+    after midnight report the previous complete day.
+    """
+    now = now or now_bkk()
+    if now.hour == 23 and now.minute >= 55:
+        return now.date()
+    return (now - timedelta(days=1)).date()
+
+
+def _within_cron_send_window(now: Optional[datetime] = None) -> bool:
+    """Allow the primary 23:59 send plus delayed post-midnight backups."""
+    now = now or now_bkk()
+    return (now.hour == 23 and now.minute >= 55) or _within_auto_send_window(now)
+
+
 def _read_sent_state() -> dict:
     try:
         if SENT_STATE_FILE.exists():
@@ -2420,6 +2438,96 @@ def send_daily_line(
         return {
             "ok": True,
             "skipped": False,
+            "date": d.isoformat(),
+            "sent_at": now_bkk().isoformat(),
+            "preview": text[:200] + ("..." if len(text) > 200 else ""),
+        }
+
+
+@app.api_route("/api/cron/run", methods=["GET", "POST"])
+def cron_run(
+    request: Request,
+    force_daily: bool = Query(False, description="Force send the daily LINE report."),
+    dry_run: bool = Query(False, description="Check what would happen without sending LINE."),
+    target: Optional[str] = Query(None, description="Optional report date YYYY-MM-DD."),
+    secret: Optional[str] = Query(None, description="Optional CRON_SECRET fallback for simple cron services."),
+):
+    """Glow-style autonomous cron endpoint.
+
+    Primary cron at 23:59 BKK reports the day that is ending. Backup cron runs
+    after midnight report the previous complete day. Sending is idempotent per
+    report date.
+    """
+    expected_secret = os.getenv("CRON_SECRET", "")
+    if expected_secret:
+        supplied_secret = request.headers.get("x-cron-secret") or secret or ""
+        if supplied_secret != expected_secret:
+            raise HTTPException(401, "Invalid cron secret")
+
+    now = now_bkk()
+    d = date.fromisoformat(target) if target else _cron_report_date(now)
+    within_window = _within_cron_send_window(now)
+    existing = _already_sent(d)
+
+    if dry_run:
+        preview = ""
+        try:
+            preview = _build_daily_text(d)[:500]
+        except Exception as e:
+            preview = f"build_failed: {str(e)[:200]}"
+        return {
+            "ok": True,
+            "dry_run": True,
+            "daily_report": "would_send" if (force_daily or (within_window and not existing)) else "would_skip",
+            "date": d.isoformat(),
+            "now_bkk": now.isoformat(),
+            "within_window": within_window,
+            "already_sent": bool(existing),
+            "preview": preview,
+        }
+
+    if not force_daily and not within_window:
+        return {
+            "ok": True,
+            "skipped": True,
+            "daily_report": "skipped",
+            "reason": "outside_daily_send_window",
+            "date": d.isoformat(),
+            "now_bkk": now.isoformat(),
+            "window": "23:55-08:59 BKK",
+        }
+
+    with SEND_DAILY_LINE_LOCK:
+        existing = _already_sent(d)
+        if existing and not force_daily:
+            return {
+                "ok": True,
+                "skipped": True,
+                "daily_report": "already_sent",
+                "date": d.isoformat(),
+                "first_sent_at": existing.get("sent_at"),
+                "preview": existing.get("preview", ""),
+            }
+
+        has_token = bool(os.getenv("LINE_CHANNEL_ACCESS_TOKEN"))
+        has_group = bool(os.getenv("LINE_GROUP_ID_EVERLY") or os.getenv("LINE_GROUP_ID"))
+        if not (has_token and has_group):
+            raise HTTPException(503, "LINE not configured (set LINE_CHANNEL_ACCESS_TOKEN + LINE_GROUP_ID_EVERLY)")
+
+        try:
+            text = _build_daily_text(d)
+        except Exception as e:
+            raise HTTPException(502, f"Failed to build report: {e}")
+
+        from lib.notify import send_line_summary
+        ok = send_line_summary(text)
+        if not ok:
+            raise HTTPException(502, "LINE push failed (check server logs)")
+        _mark_sent(d, text)
+        return {
+            "ok": True,
+            "skipped": False,
+            "daily_report": "sent",
             "date": d.isoformat(),
             "sent_at": now_bkk().isoformat(),
             "preview": text[:200] + ("..." if len(text) > 200 else ""),

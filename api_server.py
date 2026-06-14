@@ -2180,6 +2180,66 @@ def _fmt_pl(profit: float) -> str:
     return "฿0"
 
 
+def _fmt_money(v: float) -> str:
+    return f"฿{round(v):,}"
+
+
+def _daily_recommendation_lines(ads: list[dict]) -> list[str]:
+    """Short, rule-based recommendations for LINE. Never invents missing data."""
+    if not ads:
+        return ["คำแนะนำ: ยังประเมินแคมเปญไม่ได้ เพราะไม่มี Top Ads data ในรอบนี้"]
+
+    lines: list[str] = []
+
+    scale = next(
+        (a for a in ads if a.get("spent", 0) >= 500 and a.get("result", 0) >= 3 and a.get("roas", 0) >= 8),
+        None,
+    )
+    if scale:
+        lines.append(
+            f"เพิ่มงบแบบค่อยเป็นค่อยไป: {scale['campaign']} — "
+            f"ROAS {scale['roas']:.2f}x / {scale['result']} คนทัก"
+        )
+
+    test = next(
+        (a for a in ads if a.get("conversion", 0) > 0 and (a.get("spent", 0) < 500 or a.get("result", 0) <= 2)),
+        None,
+    )
+    if test and test is not scale:
+        lines.append(
+            f"เปิดเทสต์ต่อ: {test['campaign']} — ROAS {test['roas']:.2f}x แต่ sample ยังน้อย"
+        )
+
+    watch = next(
+        (a for a in sorted(ads, key=lambda x: x.get("spent", 0), reverse=True)
+         if a.get("spent", 0) >= 1000 and a.get("result", 0) > 0 and a.get("conversion", 0) == 0),
+        None,
+    )
+    if watch:
+        lines.append(
+            f"เช็กด่วน: {watch['campaign']} — คนทัก {watch['result']} แต่ยอดขายในระบบ {_fmt_money(watch['conversion'])}"
+        )
+
+    expensive = next(
+        (a for a in sorted(ads, key=lambda x: x.get("cost_per_result", 0), reverse=True)
+         if a.get("result", 0) > 0 and a.get("cost_per_result", 0) >= 200 and a.get("conversion", 0) == 0),
+        None,
+    )
+    if expensive:
+        lines.append(
+            f"เฝ้าระวัง/แก้ creative: {expensive['campaign']} — ค่าทัก {_fmt_money(expensive['cost_per_result'])}"
+        )
+
+    pause_names = [
+        a["campaign"] for a in ads
+        if a.get("spent", 0) >= 300 and a.get("result", 0) == 0 and a.get("conversion", 0) == 0
+    ][:2]
+    if pause_names:
+        lines.append(f"ควรปิด/พัก: {', '.join(pause_names)} เพราะใช้เงินแล้วไม่เกิดคนทัก/ยอดขาย")
+
+    return lines or ["คำแนะนำ: ยังไม่มีตัวที่ชัดพอให้เพิ่มงบหรือปิด ให้เก็บข้อมูลต่ออีก 24 ชม."]
+
+
 def _build_daily_text(target_d: date) -> str:
     """Build the doctor-friendly daily report text exactly like dashboard."""
     month_start = date(target_d.year, target_d.month, 1)
@@ -2228,6 +2288,22 @@ def _build_daily_text(target_d: date) -> str:
     L.append(f"เฉลี่ยต่อคนทัก: ฿{mtd_cpr:,}" if mtd_inbox else "เฉลี่ยต่อคนทัก: —")
     L.append(f"ยอดขาย: ฿{round(mtd_conv):,}")
     L.append(f"กำไร/ขาดทุน: {_fmt_pl(mtd_profit)}")
+    L.append("")
+    L.append("============")
+
+    L.append("Analysis Dashboard:")
+    L.append("https://everly-clinic.onrender.com/analysis")
+    L.append("")
+    L.append("คำแนะนำสั้น ๆ:")
+    try:
+        top_ads = everly_top_ads_range(
+            since=month_start.isoformat(),
+            until=target_d.isoformat(),
+            limit=20,
+        ).get("ads", [])
+        L.extend(_daily_recommendation_lines(top_ads))
+    except Exception as e:
+        L.append(f"คำแนะนำ: ยังประเมิน Top Ads ไม่ได้จาก API รอบนี้ ({str(e)[:80]})")
     L.append("")
     L.append("============")
     return "\n".join(L)

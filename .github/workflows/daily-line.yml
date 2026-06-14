@@ -1,7 +1,7 @@
 name: Daily LINE notification
 
 # Fires every day at 00:00 Bangkok time (17:00 UTC).
-# Backup retries fire during the first hour after midnight. The API has a
+# Backup retries fire from midnight through early morning. The API has a
 # per-date idempotency guard, so the backup run skips if the main run already
 # sent the report.
 # Free on GitHub Actions for public repos — runs on GitHub's servers,
@@ -17,6 +17,12 @@ on:
     - cron: '9 17 * * *'   # 00:09 BKK backup retry for previous day
     - cron: '29 17 * * *'  # 00:29 BKK backup retry
     - cron: '49 17 * * *'  # 00:49 BKK backup retry
+    - cron: '20 18 * * *'  # 01:20 BKK backup for GitHub queue delay
+    - cron: '20 19 * * *'  # 02:20 BKK backup for GitHub queue delay
+    - cron: '20 20 * * *'  # 03:20 BKK backup for GitHub queue delay
+    - cron: '20 21 * * *'  # 04:20 BKK backup for GitHub queue delay
+    - cron: '20 22 * * *'  # 05:20 BKK backup for GitHub queue delay
+    - cron: '20 23 * * *'  # 06:20 BKK backup for GitHub queue delay
   workflow_dispatch:  # manual trigger from GitHub UI
 
 concurrency:

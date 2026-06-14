@@ -273,9 +273,14 @@ def _default_report_date() -> date:
 
 
 def _within_auto_send_window(now: Optional[datetime] = None) -> bool:
-    """Allow automatic LINE sends only around midnight Bangkok time."""
+    """Allow automatic LINE sends from midnight through morning Bangkok time.
+
+    GitHub scheduled workflows on the free tier can start late. Keep the
+    idempotency guard per report date, but allow delayed runs to still send the
+    previous completed day before the team starts work.
+    """
     now = now or now_bkk()
-    return now.hour == 0
+    return 0 <= now.hour <= 8
 
 
 def _read_sent_state() -> dict:
@@ -1937,7 +1942,7 @@ def admin_faq(
 def keepalive():
     """Lightweight ping that:
       1. Confirms the Render service is awake
-      2. AUTO-TRIGGERS daily LINE in the 00:00-00:59 BKK window if not sent
+      2. AUTO-TRIGGERS daily LINE in the 00:00-08:59 BKK window if not sent
          — this gives LINE several chances to go out at midnight,
          without touching Meta API on every ping.
     """
@@ -1946,9 +1951,9 @@ def keepalive():
     line_reason = ""
     try:
         now = now_bkk()
-        # Trigger window: 00:00 BKK → 00:59 BKK.
-        # GitHub schedule delays beyond this should skip instead of sending
-        # an early-morning report into LINE.
+        # Trigger window: 00:00 BKK → 08:59 BKK.
+        # GitHub schedule delays are common, so delayed early-morning runs
+        # should still deliver the previous complete day's report.
         within_send_window = _within_auto_send_window(now)
         if within_send_window:
             target_date = _default_report_date()
@@ -1976,7 +1981,7 @@ def keepalive():
                     line_status = "already_sent_today"
         else:
             line_status = "outside_window"
-            line_reason = f"hour={now.hour} min={now.minute} · window: 00:00-00:59"
+            line_reason = f"hour={now.hour} min={now.minute} · window: 00:00-08:59"
     except Exception as e:
         line_status = "error"
         line_reason = str(e)[:100]
@@ -2166,7 +2171,7 @@ def send_daily_line(
             "skipped": True,
             "reason": "outside_auto_send_window",
             "now_bkk": now.isoformat(),
-            "window": "00:00-00:59 BKK",
+            "window": "00:00-08:59 BKK",
         }
 
     d = date.fromisoformat(target) if target else _default_report_date()

@@ -504,6 +504,7 @@
         <span id="saveDot" class="save-dot"></span>
         <span id="saveText">บันทึกแล้ว</span>
       </div>
+      <a class="btn btn-ghost btn-sm" href="#sec-trend" onclick="document.getElementById('sec-trend').open = true; fetchTrend();">Analysis</a>
       <button class="btn btn-ghost btn-sm" onclick="exportJSON()">Export</button>
       <button class="btn btn-ghost btn-sm" onclick="resetAll()">Reset</button>
       <button class="btn btn-metal btn-sm" onclick="refreshAllLive()">↻ Refresh All Live</button>
@@ -646,7 +647,7 @@
      SECTION 03 · PERFORMANCE TREND (target 10x)
      ============================================================ -->
 <section class="page-shell max-w-[1400px] mx-auto px-8 pt-6">
-  <details class="section" id="sec-trend" ontoggle="onSectionToggle('trend', this)">
+  <details class="section" id="sec-trend" ontoggle="onSectionToggle('trend', this)" open>
     <summary>
       <div>
         <div class="sec-eyebrow flex items-center gap-2">
@@ -1289,7 +1290,8 @@ function deltaHTML(curr, prev, invert=false) {
 }
 async function fetchTrend() {
   try {
-    const j = await apiGet(`/api/everly/summary?since=${monthStart()}&until=${isoToday()}`);
+    const [since, until] = allTimeRange();
+    const j = await apiGet(`/api/everly/summary?since=${since}&until=${until}`);
     setLive('tr', j.mock ? 'mock' : 'live');
     const months = aggregateByMonth(j.days);
     renderMonthCards(months);
@@ -1652,6 +1654,14 @@ function renderAll() {
     if (ok) { _loaded.overview = true; fetchOverview(); }
     else setLive('ov', false);
   }, 200);
+
+  // Keep the analysis/monthly comparison visible and loaded by default.
+  setTimeout(async () => {
+    if (_loaded.trend) return;
+    const ok = await applyConfigurationGate();
+    if (ok) { _loaded.trend = true; fetchTrend(); }
+    else setLive('tr', false);
+  }, 450);
 
   // (Main tab switcher removed — Admin tab + Live Ticker stripped per user request)
 

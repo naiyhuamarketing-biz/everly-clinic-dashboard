@@ -303,12 +303,22 @@ def _within_cron_send_window(now: Optional[datetime] = None) -> bool:
 
 
 def _read_sent_state() -> dict:
+    state = {
+        # One-time safety marker: this report was manually sent before the
+        # LINE retry-key hardening deploy on 2026-06-15 00:28 BKK. Render's
+        # /tmp state can reset on deploy, so keep this date suppressed.
+        "2026-06-14": {
+            "sent_at": "2026-06-15T00:28:41.929213+07:00",
+            "line_retry_key": "manual-before-retry-key",
+            "preview": "EVERLY CLINIC — DAILY REPORT",
+        }
+    }
     try:
         if SENT_STATE_FILE.exists():
-            return json.loads(SENT_STATE_FILE.read_text(encoding="utf-8"))
+            state.update(json.loads(SENT_STATE_FILE.read_text(encoding="utf-8")))
     except Exception:
         pass
-    return {}
+    return state
 
 
 def _write_sent_state(state: dict) -> None:

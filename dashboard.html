@@ -504,7 +504,7 @@
         <span id="saveDot" class="save-dot"></span>
         <span id="saveText">บันทึกแล้ว</span>
       </div>
-      <a class="btn btn-ghost btn-sm" href="#sec-trend" onclick="document.getElementById('sec-trend').open = true; fetchTrend();">Analysis</a>
+      <a class="btn btn-ghost btn-sm" href="/analysis" onclick="document.getElementById('sec-trend').open = true; fetchTrend();">Analysis</a>
       <button class="btn btn-ghost btn-sm" onclick="exportJSON()">Export</button>
       <button class="btn btn-ghost btn-sm" onclick="resetAll()">Reset</button>
       <button class="btn btn-metal btn-sm" onclick="refreshAllLive()">↻ Refresh All Live</button>
@@ -1289,15 +1289,26 @@ function deltaHTML(curr, prev, invert=false) {
   return `<span style="color:${color}; font-weight:600">${arrow} ${Math.abs(p).toFixed(1)}%</span>`;
 }
 async function fetchTrend() {
+  const cardsEl = document.getElementById('tr-cards');
+  if (cardsEl) {
+    cardsEl.innerHTML = `<div class="card p-5 col-span-2 md:col-span-4 text-sm" style="color:var(--soft)">กำลังโหลดข้อมูลวิเคราะห์รายเดือนจาก Meta...</div>`;
+  }
   try {
     const [since, until] = allTimeRange();
     const j = await apiGet(`/api/everly/summary?since=${since}&until=${until}`);
     setLive('tr', j.mock ? 'mock' : 'live');
     const months = aggregateByMonth(j.days);
+    if (!months.length) {
+      if (cardsEl) cardsEl.innerHTML = `<div class="card p-5 col-span-2 md:col-span-4 text-sm" style="color:var(--soft)">ยังไม่มีข้อมูลรายเดือนในช่วงที่เลือก</div>`;
+      return;
+    }
     renderMonthCards(months);
     renderMonthChart(months);
     renderSpendRevChart(months);
-  } catch (e) { setLive('tr', false); }
+  } catch (e) {
+    setLive('tr', false);
+    if (cardsEl) cardsEl.innerHTML = `<div class="card p-5 col-span-2 md:col-span-4 text-sm" style="color:var(--dusty)">โหลดข้อมูลวิเคราะห์รายเดือนไม่สำเร็จ กรุณากด Refresh อีกครั้ง</div>`;
+  }
 }
 let spendRevChart;
 function renderSpendRevChart(months) {
@@ -1642,6 +1653,22 @@ function renderAll() {
 
   renderAll();
   setTimeout(()=> setSaving(false), 100);
+
+  const isAnalysisView =
+    window.location.pathname.replace(/\/$/, '').endsWith('/analysis') ||
+    new URLSearchParams(window.location.search).get('view') === 'analysis' ||
+    window.location.hash === '#sec-trend';
+  if (isAnalysisView) {
+    const overview = document.getElementById('sec-overview');
+    const top = document.getElementById('sec-top');
+    const trend = document.getElementById('sec-trend');
+    const report = document.getElementById('sec-report');
+    if (overview) overview.open = false;
+    if (top) top.open = false;
+    if (trend) trend.open = true;
+    if (report) report.open = false;
+    setTimeout(() => trend?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 700);
+  }
 
   const pendingSectionToggles = window.__pendingSectionToggles || [];
   window.__pendingSectionToggles = [];

@@ -2262,6 +2262,16 @@ def dashboard_alias():
     return FileResponse(DASHBOARD_FILE, headers=NO_CACHE_HEADERS)
 
 
+@app.head("/analysis")
+def analysis_alias_head():
+    return Response(headers=NO_CACHE_HEADERS)
+
+
+@app.get("/analysis")
+def analysis_alias():
+    return FileResponse(DASHBOARD_FILE, headers=NO_CACHE_HEADERS)
+
+
 if __name__ == "__main__":
     import uvicorn
     # Render injects PORT env var; default to 8000 for local

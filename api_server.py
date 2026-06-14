@@ -592,7 +592,7 @@ def everly_top_ads_range(
     if _mock_data_enabled():
         return _mock_top_ads_range(s, u, limit)
 
-    key = f"top-range:{s.isoformat()}:{u.isoformat()}:{signature()}"
+    key = f"top-range-active:{s.isoformat()}:{u.isoformat()}:{signature()}"
 
     def _load():
         from facebook_business.api import FacebookAdsApi
@@ -610,6 +610,7 @@ def everly_top_ads_range(
         params = {
             "time_range": {"since": s.isoformat(), "until": u.isoformat()},
             "level": "ad",
+            "filtering": [{"field": "ad.effective_status", "operator": "IN", "value": ["ACTIVE"]}],
         }
         return list(account.get_insights(fields=fields, params=params))
 
@@ -661,6 +662,7 @@ def everly_top_ads_range(
     return {
         "since": s.isoformat(),
         "until": u.isoformat(),
+        "active_only": True,
         "n_ads": len(sorted_rows),
         "ads": sorted_rows[:limit],
         "fetched_at": now_bkk().isoformat(),
@@ -2184,15 +2186,40 @@ def _fmt_money(v: float) -> str:
     return f"฿{round(v):,}"
 
 
+def _campaign_objective_code(campaign: str) -> str:
+    """Return the known Everly campaign objective prefix, such as M/F/E."""
+    for token in re.findall(r"[A-Za-z]+", (campaign or "").upper()):
+        if token in {"M", "F", "E"}:
+            return token
+    return ""
+
+
+def _cost_benchmark_line(a: dict, avg_cpm: float) -> str:
+    cpm = float(a.get("cpm", 0) or 0)
+    if avg_cpm <= 0 or cpm <= 0:
+        return "ยังเทียบ CPM ไม่ได้ เพราะข้อมูล impression/CPM ไม่พอ"
+    if cpm >= avg_cpm * 1.2:
+        return f"CPM {_fmt_money(cpm)} แพงกว่าค่าเฉลี่ยกลุ่ม {_fmt_money(avg_cpm)}"
+    if cpm <= avg_cpm * 0.8:
+        return f"CPM {_fmt_money(cpm)} ถูกกว่าค่าเฉลี่ยกลุ่ม {_fmt_money(avg_cpm)}"
+    return f"CPM {_fmt_money(cpm)} ใกล้ค่าเฉลี่ยกลุ่ม {_fmt_money(avg_cpm)}"
+
+
 def _daily_recommendation_lines(ads: list[dict]) -> list[str]:
     """Short, rule-based recommendations for LINE. Never invents missing data."""
     if not ads:
         return ["คำแนะนำ: ยังประเมินแคมเปญไม่ได้ เพราะไม่มี Top Ads data ในรอบนี้"]
 
     lines: list[str] = []
+    message_ads = [a for a in ads if _campaign_objective_code(str(a.get("campaign", ""))) == "M"]
+    cost_only_ads = [a for a in ads if _campaign_objective_code(str(a.get("campaign", ""))) in {"F", "E"}]
+    unknown_ads = [
+        a for a in ads
+        if a.get("spent", 0) > 0 and not _campaign_objective_code(str(a.get("campaign", "")))
+    ]
 
     scale = next(
-        (a for a in ads if a.get("spent", 0) >= 500 and a.get("result", 0) >= 3 and a.get("roas", 0) >= 8),
+        (a for a in message_ads if a.get("spent", 0) >= 500 and a.get("result", 0) >= 3 and a.get("roas", 0) >= 8),
         None,
     )
     if scale:
@@ -2203,7 +2230,7 @@ def _daily_recommendation_lines(ads: list[dict]) -> list[str]:
         )
 
     test = next(
-        (a for a in ads if a.get("conversion", 0) > 0 and (a.get("spent", 0) < 500 or a.get("result", 0) <= 2)),
+        (a for a in message_ads if a.get("conversion", 0) > 0 and (a.get("spent", 0) < 500 or a.get("result", 0) <= 2)),
         None,
     )
     if test and test is not scale:
@@ -2214,7 +2241,7 @@ def _daily_recommendation_lines(ads: list[dict]) -> list[str]:
         )
 
     watch = next(
-        (a for a in sorted(ads, key=lambda x: x.get("spent", 0), reverse=True)
+        (a for a in sorted(message_ads, key=lambda x: x.get("spent", 0), reverse=True)
          if a.get("spent", 0) >= 1000 and a.get("result", 0) > 0 and a.get("conversion", 0) == 0),
         None,
     )
@@ -2226,7 +2253,7 @@ def _daily_recommendation_lines(ads: list[dict]) -> list[str]:
         )
 
     expensive = next(
-        (a for a in sorted(ads, key=lambda x: x.get("cost_per_result", 0), reverse=True)
+        (a for a in sorted(message_ads, key=lambda x: x.get("cost_per_result", 0), reverse=True)
          if a.get("result", 0) > 0 and a.get("cost_per_result", 0) >= 200 and a.get("conversion", 0) == 0),
         None,
     )
@@ -2238,7 +2265,7 @@ def _daily_recommendation_lines(ads: list[dict]) -> list[str]:
         )
 
     pause_names = [
-        a["campaign"] for a in ads
+        a["campaign"] for a in message_ads
         if a.get("spent", 0) >= 300 and a.get("result", 0) == 0 and a.get("conversion", 0) == 0
     ][:2]
     if pause_names:
@@ -2246,6 +2273,27 @@ def _daily_recommendation_lines(ads: list[dict]) -> list[str]:
             "ควรปิด/พัก\n"
             f"- แคมเปญ: {', '.join(pause_names)}\n"
             "- เหตุผล: MTD ใช้เงินแล้วไม่เกิดคนทัก/ยอดขาย"
+        )
+
+    if cost_only_ads:
+        total_impressions = sum(float(a.get("impression", 0) or 0) for a in cost_only_ads)
+        total_spent = sum(float(a.get("spent", 0) or 0) for a in cost_only_ads)
+        avg_cpm = (total_spent / total_impressions * 1000) if total_impressions else 0
+        cost_focus = sorted(cost_only_ads, key=lambda x: x.get("spent", 0), reverse=True)[0]
+        code = _campaign_objective_code(str(cost_focus.get("campaign", "")))
+        objective = "Follow" if code == "F" else "Engagement"
+        lines.append(
+            f"ดูต้นทุน {objective}\n"
+            f"- แคมเปญ: {cost_focus['campaign']}\n"
+            f"- เหตุผล: {_cost_benchmark_line(cost_focus, avg_cpm)} ไม่ใช้เกณฑ์คนทัก/ยอดขาย"
+        )
+
+    if unknown_ads:
+        names = ", ".join(str(a.get("campaign", "")) for a in unknown_ads[:2])
+        lines.append(
+            "รอยืนยันตัวย่อ\n"
+            f"- แคมเปญ: {names}\n"
+            "- เหตุผล: ไม่พบตัวย่อ M/F/E จึงไม่เดาวัตถุประสงค์แคมเปญ"
         )
 
     return lines or ["คำแนะนำ: ยังไม่มีตัวที่ชัดพอให้เพิ่มงบหรือปิด ให้เก็บข้อมูลต่ออีก 24 ชม."]
@@ -2326,6 +2374,9 @@ def _build_daily_text(target_d: date) -> str:
     L.append("============")
     L.append("5) หมายเหตุ")
     L.append("- คำแนะนำวัดจากข้อมูล MTD ตั้งแต่วันที่ 1 ถึงวันที่รายงาน")
+    L.append("- Action แนะนำรายงานเฉพาะแอดที่ Active เท่านั้น")
+    L.append("- M = Message วัดจากคนทัก/ROAS")
+    L.append("- F = Follow และ E = Engagement วัดจากต้นทุนเทียบค่าเฉลี่ย ไม่ใช้เกณฑ์คนทัก/ยอดขาย")
     L.append("- ถ้ายอดขายจริงมีแต่ระบบไม่จับ ให้เช็ก tracking/การบันทึกยอดขายก่อนตัดสินใจปิดแอด")
     L.append("============")
     return "\n".join(L)

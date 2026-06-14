@@ -1,7 +1,8 @@
 # Render blueprint — Everly Clinic dashboard
 # Env vars set via Render dashboard (NOT committed):
-#   FB_ACCESS_TOKEN, FB_APP_ID, FB_APP_SECRET, FB_ACCOUNT_EVERLY CLINIC_ACCOUNTS
-#   LINE_CHANNEL_ACCESS_TOKEN, LINE_GROUP_ID_EVERLY CLINIC
+#   FB_ACCESS_TOKEN, FB_APP_ID, FB_APP_SECRET, FB_ACCOUNT_EVERLY
+#   LINE_CHANNEL_ACCESS_TOKEN, LINE_GROUP_ID_EVERLY
+#   CRON_SECRET (same value as GitHub Actions secret)
 services:
   - type: web
     name: everly-dashboard
@@ -14,3 +15,17 @@ services:
         value: "3.11"
       - key: TZ
         value: Asia/Bangkok
+      - key: FB_ACCESS_TOKEN
+        sync: false
+      - key: FB_APP_ID
+        sync: false
+      - key: FB_APP_SECRET
+        sync: false
+      - key: FB_ACCOUNT_EVERLY
+        value: "1965556974211662"
+      - key: LINE_CHANNEL_ACCESS_TOKEN
+        sync: false
+      - key: LINE_GROUP_ID_EVERLY
+        sync: false
+      - key: CRON_SECRET
+        sync: false

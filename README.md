@@ -29,13 +29,13 @@ Live FastAPI dashboard ที่ดึงข้อมูล Meta Marketing API �
 
 ## 📲 LINE Auto-send (00:00 ทุกคืน)
 
-GitHub Actions cron ยิง endpoint `/api/everly/send-daily-line` ทุกวัน 17:00 UTC = 00:00 BKK
+GitHub Actions cron ยิง endpoint `/api/cron/run` ทุกวันช่วง 23:59-00:55 เวลาไทย พร้อม backup หลังเที่ยงคืน
 
 ตัวอย่าง: ถ้าวันนี้วันที่ 21 ระบบจะส่ง Report ของวันที่ 20 ทั้งวัน และยอดสะสมวันที่ 1-20
 
-ตอนนี้ส่งเข้า LINE group เดียวกับ Glow (ใช้ `LINE_GROUP_ID`)
+ระบบนี้บังคับส่งเข้า LINE group ของ Everly เท่านั้น (`LINE_GROUP_ID_EVERLY`)
 
-ถ้าอยากแยกกลุ่มของ Everly เอง ตั้ง `LINE_GROUP_ID_EVERLY` ใน Render env vars แทน
+ห้ามใช้ `LINE_GROUP_ID` รวมกับแบรนด์อื่น เพราะเสี่ยงส่งรายงานลูกค้าเข้าผิดกลุ่ม
 
 ---
 
@@ -52,14 +52,13 @@ GitHub Actions cron ยิง endpoint `/api/everly/send-daily-line` ทุก�
 ## 🔑 Env vars (set in Render dashboard)
 
 ```
-FB_ACCESS_TOKEN=EAANuoJg...
-FB_APP_ID=966060955830858
-FB_APP_SECRET=...
+FB_ACCESS_TOKEN=<set in Render only>
+FB_APP_ID=<set in Render only>
+FB_APP_SECRET=<set in Render only>
 FB_ACCOUNT_EVERLY=1965556974211662
 LINE_CHANNEL_ACCESS_TOKEN=...
-LINE_GROUP_ID=Ca5ee252c90c5b73799813eed13f0ec6d   (Glow/Everly shared)
-# หรือ
-LINE_GROUP_ID_EVERLY=...                          (Everly-only — overrides above)
+LINE_GROUP_ID_EVERLY=...
+CRON_SECRET=...
 ```
 
 ---
@@ -100,7 +99,7 @@ Token long-lived expires `~2026-07-01` (60 days).
 
 **Auto-extend:** ถ้าเปิด dashboard ทุก 24 ชม. → Render fetches Meta API → token ต่ออายุเอง
 
-**Manual refresh:** ถ้า token หมด → รัน `python refresh_token.py` (ของ Glow) ที่ Mac → copy token ใหม่ → Render env vars → save
+**Manual refresh:** ถ้า token หมด → รัน `python refresh_token.py` ในโปรเจกต์ Everly นี้ → copy token ใหม่ → Render env vars → save
 
 ---
 

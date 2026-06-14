@@ -20,10 +20,20 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Run Everly cron endpoint
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
           set -e
           URL="https://everly-clinic.onrender.com/api/cron/run"
-          RESP=$(curl -s --fail --max-time 90 -X POST "$URL" -H "Content-Type: application/json")
+          AUTH_HEADER=()
+          if [ -n "${CRON_SECRET:-}" ]; then
+            AUTH_HEADER=(-H "X-Cron-Secret: $CRON_SECRET")
+          else
+            echo "  ! CRON_SECRET GitHub secret not set; calling cron without secret"
+          fi
+          RESP=$(curl -s --fail --max-time 90 -X POST "$URL" \
+            -H "Content-Type: application/json" \
+            "${AUTH_HEADER[@]}")
           echo "$RESP"
           if echo "$RESP" | grep -q '"ok":true' && echo "$RESP" | grep -Eq '"daily_report":"(sent|already_sent)"'; then
             echo "  ✓ daily report sent or already sent"

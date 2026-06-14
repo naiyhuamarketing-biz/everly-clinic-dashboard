@@ -32,9 +32,9 @@ curl https://everly-clinic.onrender.com/api/line/status
 
 ### Fix:
 1. เปิด terminal บน Mac
-2. ไปที่โฟลเดอร์ Glow:
+2. ไปที่โฟลเดอร์ Everly:
    ```bash
-   cd ~/Desktop/Code/ads-report
+   cd ~/Desktop/Code/ads-report-everly
    ./.venv/bin/python refresh_token.py
    ```
 3. Script จะ print token ใหม่ + อายุ
@@ -99,12 +99,12 @@ GitHub repo: https://github.com/naiyhuamarketing-biz/everly-clinic-dashboard
 Render service ID: srv-d7rjoj77f7vs73d1f2dg
 Render URL: https://everly-clinic.onrender.com
 
-FB App ID: 966060955830858
-FB App Secret: 3e691fecc3d944143a01c0bc62347c6c
+FB App ID: ดูใน Render env vars / Meta app settings
+FB App Secret: ดูใน Render env vars / Meta app settings
 FB Account Everly: 1965556974211662
 FB Token: ดูใน Render env vars
 
-LINE Group "หลังบ้าน Everly": Cadcdbc4edb28e9f1441e5b2c16f78628
+LINE Group "หลังบ้าน Everly": ดูค่า `LINE_GROUP_ID_EVERLY` ใน Render env vars
 LINE Channel Token: ดูใน Render env vars
 ```
 

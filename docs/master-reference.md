@@ -30,10 +30,10 @@
 ## ⏰ LINE 00:00 BKK auto-send
 
 - **Workflow:** `.github/workflows/daily-line.yml`
-- **Schedule:** `0 17 * * *` (UTC = 00:00 Bangkok)
-- **Endpoint:** `/api/everly/send-daily-line`
+- **Schedule:** `59 16 * * *` + backup retries (UTC = 23:59 Bangkok primary)
+- **Endpoint:** `/api/cron/run`
 - **Report date:** วันที่เพิ่งจบไป เช่น 21 พ.ค. 00:00 จะรายงาน 20 พ.ค. และสะสม 1-20 พ.ค.
-- **กลุ่มที่ส่ง:** เดียวกับ Glow (Glow Visage group)
+- **กลุ่มที่ส่ง:** Everly Clinic LINE group เท่านั้น
 - **ทดสอบแล้ว:** ✅ `25279508679` workflow run = success
 - **Trigger manual:** GitHub Actions tab → "Run workflow"
 
@@ -59,17 +59,18 @@ Report สะสมตั้งแต่ต้นเดือน - ถึงว�
 ## 🔑 Credentials (ใน Render env vars)
 
 ```
-FB_ACCESS_TOKEN=EAANuoJgaikoBRbhK2TjwCpGchToT7EBWCVyx4WvvuujBI9iZCaOZ...
-FB_APP_ID=966060955830858
-FB_APP_SECRET=3e691fecc3d944143a01c0bc62347c6c
+FB_ACCESS_TOKEN=<set in Render only>
+FB_APP_ID=<set in Render only>
+FB_APP_SECRET=<set in Render only>
 FB_ACCOUNT_EVERLY=1965556974211662
-LINE_CHANNEL_ACCESS_TOKEN=MzX1VK/8MIvT4aHILi/iuVYJ0pE...
-LINE_GROUP_ID=Ca5ee252c90c5b73799813eed13f0ec6d
+LINE_CHANNEL_ACCESS_TOKEN=<set in Render only>
+LINE_GROUP_ID_EVERLY=<Everly LINE group id only>
+CRON_SECRET=<same value in Render and GitHub Actions secrets>
 ```
 
 **Token expires:** ~2026-07-01 (60 days)
 - ถ้าเปิด dashboard ทุก 24 ชม → token auto-extend
-- ถ้าหมด: รัน `~/Desktop/Code/ads-report/refresh_token.py` (ของ Glow) → copy token ใหม่ → Render env → save
+- ถ้าหมด: รัน `~/Desktop/Code/ads-report-everly/refresh_token.py` → copy token ใหม่ → Render env → save
 
 ---
 
@@ -85,7 +86,8 @@ LINE_GROUP_ID=Ca5ee252c90c5b73799813eed13f0ec6d
 
 ### Manual ทดสอบ LINE ส่ง
 ```bash
-curl -X POST https://everly-clinic.onrender.com/api/everly/send-daily-line
+curl -X POST https://everly-clinic.onrender.com/api/cron/run \
+  -H "X-Cron-Secret: <CRON_SECRET>"
 ```
 
 ### Manual trigger GitHub Actions cron
@@ -100,7 +102,7 @@ curl -X POST https://everly-clinic.onrender.com/api/everly/send-daily-line
 - [x] Deploy 24/7 ✅
 - [x] LINE 00:00 auto ✅
 - [ ] ใส่โลโก้จริงแทน "e" monogram (save `assets/everly_logo.png`)
-- [ ] สร้าง LINE group เฉพาะ Everly (ตอนนี้ใช้กลุ่ม Glow ร่วม)
+- [ ] ยืนยันว่า Render ใช้ `LINE_GROUP_ID_EVERLY` ของกลุ่มหลังบ้าน Everly เท่านั้น
 - [ ] AI Insights — narrative สรุปเดือน
 - [ ] เพิ่มคลินิกอื่นในอนาคตโดยแยก repo/env ให้ชัดเจน
 

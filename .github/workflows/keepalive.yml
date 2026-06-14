@@ -27,10 +27,19 @@ jobs:
     timeout-minutes: 2
     steps:
       - name: Ping lightweight endpoint
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
           URL="https://everly-clinic.onrender.com/api/everly/keepalive"
+          AUTH_HEADER=()
+          if [ -n "${CRON_SECRET:-}" ]; then
+            AUTH_HEADER=(-H "X-Cron-Secret: $CRON_SECRET")
+          else
+            echo "  ! CRON_SECRET GitHub secret not set; calling keepalive without secret"
+          fi
           # Allow up to 90s for cold-start wake; ignore non-200 (don't fail action)
-          STATUS=$(curl -s -o /tmp/body --max-time 90 -w "%{http_code}" "$URL" || echo "000")
+          STATUS=$(curl -s -o /tmp/body --max-time 90 -w "%{http_code}" \
+            "${AUTH_HEADER[@]}" "$URL" || echo "000")
           echo "HTTP $STATUS"
           cat /tmp/body 2>/dev/null | head -c 500 || true
           echo

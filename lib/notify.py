@@ -7,12 +7,11 @@ from typing import List, Optional
 def send_line_summary(message: str, image_paths: List[Path] = None, retry_key: Optional[str] = None) -> bool:
     """Push text + images to LINE OA group via Messaging API.
 
-    Group resolution order:
-      1. LINE_GROUP_ID_EVERLY (Everly-specific override)
-      2. LINE_GROUP_ID        (single-group fallback)
+    Everly must use its own LINE group. Do not fall back to another brand's
+    LINE_GROUP_ID; that can leak client reports to the wrong room.
     """
     token = os.getenv("LINE_CHANNEL_ACCESS_TOKEN")
-    group_id = os.getenv("LINE_GROUP_ID_EVERLY") or os.getenv("LINE_GROUP_ID")
+    group_id = os.getenv("LINE_GROUP_ID_EVERLY")
     if not token or not group_id:
         print("  [SKIP] LINE not configured (LINE_CHANNEL_ACCESS_TOKEN / LINE_GROUP_ID_EVERLY)")
         return False

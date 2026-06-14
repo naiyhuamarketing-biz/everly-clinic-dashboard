@@ -302,6 +302,31 @@ def _within_cron_send_window(now: Optional[datetime] = None) -> bool:
     return (now.hour == 23 and now.minute >= 55) or _within_auto_send_window(now)
 
 
+def _configured_cron_secret() -> str:
+    return os.getenv("CRON_SECRET", "").strip()
+
+
+def _supplied_cron_secret(request: Request, secret: Optional[str] = None) -> str:
+    return (request.headers.get("x-cron-secret") or secret or "").strip()
+
+
+def _cron_secret_is_valid(request: Request, secret: Optional[str] = None) -> bool:
+    expected = _configured_cron_secret()
+    return bool(expected) and _supplied_cron_secret(request, secret) == expected
+
+
+def _require_cron_secret(request: Request, secret: Optional[str] = None, action: str = "this action") -> None:
+    expected = _configured_cron_secret()
+    if not expected:
+        raise HTTPException(503, f"{action} requires CRON_SECRET to be configured")
+    if _supplied_cron_secret(request, secret) != expected:
+        raise HTTPException(401, "Invalid cron secret")
+
+
+def _line_configured() -> bool:
+    return bool(os.getenv("LINE_CHANNEL_ACCESS_TOKEN") and os.getenv("LINE_GROUP_ID_EVERLY"))
+
+
 def _read_sent_state() -> dict:
     state = {
         # One-time safety marker: this report was manually sent before the
@@ -399,7 +424,8 @@ def health():
         "configured": has_token,
         "required_account_env": "FB_ACCOUNT_EVERLY",
         "required_account_ids": ["1965556974211662"],
-        "line_configured": bool(os.getenv("LINE_CHANNEL_ACCESS_TOKEN") and (os.getenv("LINE_GROUP_ID_EVERLY") or os.getenv("LINE_GROUP_ID"))),
+        "line_configured": _line_configured(),
+        "line_group_required": "LINE_GROUP_ID_EVERLY",
         "meta_configured": bool(os.getenv("FB_ACCESS_TOKEN")),
         "mock_mode": mock,
         "mock": mock,
@@ -2064,7 +2090,10 @@ def admin_faq(
 
 
 @app.get("/api/everly/keepalive")
-def keepalive():
+def keepalive(
+    request: Request,
+    secret: Optional[str] = Query(None, description="CRON_SECRET required for keepalive auto-send."),
+):
     """Lightweight ping that:
       1. Confirms the Render service is awake
       2. AUTO-TRIGGERS daily LINE in the 23:55-08:59 BKK window if not sent
@@ -2084,24 +2113,26 @@ def keepalive():
             target_date = _cron_report_date(now)
             with SEND_DAILY_LINE_LOCK:
                 if not _already_sent(target_date):
-                    # Inline call — avoid HTTP round-trip
-                    has_token = bool(os.getenv("LINE_CHANNEL_ACCESS_TOKEN"))
-                    has_group = bool(os.getenv("LINE_GROUP_ID_EVERLY") or os.getenv("LINE_GROUP_ID"))
-                    if has_token and has_group:
-                        try:
-                            text = _build_daily_text(target_date)
-                            from lib.notify import send_line_summary
-                            if send_line_summary(text, retry_key=_daily_line_retry_key(target_date)):
-                                _mark_sent(target_date, text)
-                                line_status = "sent"
-                                line_reason = f"auto-triggered from keepalive · date={target_date.isoformat()}"
-                            else:
-                                line_status = "send_failed"
-                        except Exception as e:
-                            line_status = "build_failed"
-                            line_reason = str(e)[:100]
+                    if _configured_cron_secret() and not _cron_secret_is_valid(request, secret):
+                        line_status = "secret_required"
+                        line_reason = "keepalive auto-send requires valid CRON_SECRET"
                     else:
-                        line_status = "line_not_configured"
+                        # Inline call — avoid HTTP round-trip
+                        if _line_configured():
+                            try:
+                                text = _build_daily_text(target_date)
+                                from lib.notify import send_line_summary
+                                if send_line_summary(text, retry_key=_daily_line_retry_key(target_date)):
+                                    _mark_sent(target_date, text)
+                                    line_status = "sent"
+                                    line_reason = f"auto-triggered from keepalive · date={target_date.isoformat()}"
+                                else:
+                                    line_status = "send_failed"
+                            except Exception as e:
+                                line_status = "build_failed"
+                                line_reason = str(e)[:100]
+                        else:
+                            line_status = "line_not_configured"
                 else:
                     line_status = "already_sent_today"
         else:
@@ -2164,23 +2195,34 @@ def token_info():
 @app.get("/api/line/status")
 def line_status():
     has_token = bool(os.getenv("LINE_CHANNEL_ACCESS_TOKEN"))
-    has_group = bool(os.getenv("LINE_GROUP_ID_EVERLY") or os.getenv("LINE_GROUP_ID"))
+    has_everly_group = bool(os.getenv("LINE_GROUP_ID_EVERLY"))
+    has_fallback_group = bool(os.getenv("LINE_GROUP_ID"))
+    has_secret = bool(_configured_cron_secret())
     return {
-        "configured": has_token and has_group,
+        "configured": has_token and has_everly_group,
         "has_token": has_token,
-        "has_group": has_group,
+        "has_group": has_everly_group,
+        "has_everly_group": has_everly_group,
+        "fallback_group_present_but_ignored": has_fallback_group,
+        "manual_send_locked": True,
+        "cron_secret_configured": has_secret,
     }
 
 
 @app.post("/api/line/send")
-def line_send(payload: dict = Body(...)):
+def line_send(
+    request: Request,
+    payload: Optional[dict] = Body(None),
+    secret: Optional[str] = Query(None, description="CRON_SECRET required for manual LINE sends."),
+):
     """Push dashboard-provided report text to the Everly LINE group."""
+    _require_cron_secret(request, secret, "Manual LINE send")
+    if not isinstance(payload, dict):
+        raise HTTPException(400, "JSON body required")
     text = str(payload.get("text") or "").strip()
     if not text:
         raise HTTPException(400, "text required")
-    has_token = bool(os.getenv("LINE_CHANNEL_ACCESS_TOKEN"))
-    has_group = bool(os.getenv("LINE_GROUP_ID_EVERLY") or os.getenv("LINE_GROUP_ID"))
-    if not (has_token and has_group):
+    if not _line_configured():
         raise HTTPException(503, "LINE not configured (set LINE_CHANNEL_ACCESS_TOKEN + LINE_GROUP_ID_EVERLY)")
 
     from lib.notify import send_line_summary
@@ -2402,15 +2444,11 @@ def send_daily_line(
     """Build daily report and push to LINE.
     Called by GitHub Actions at 00:00 BKK (17:00 UTC) every day.
     `target` defaults to the previous complete day around midnight BKK.
-    Token-protected via X-Cron-Secret header if CRON_SECRET env var is set.
+    Token-protected via X-Cron-Secret header when CRON_SECRET is configured.
+    Force/target sends always require CRON_SECRET to avoid public resends.
     """
-    # Optional hardening: if CRON_SECRET is set on Render, only scheduled jobs
-    # that know the secret can trigger LINE sends.
-    expected_secret = os.getenv("CRON_SECRET", "")
-    if expected_secret:
-        supplied_secret = request.headers.get("x-cron-secret") or secret or ""
-        if supplied_secret != expected_secret:
-            raise HTTPException(401, "Invalid cron secret")
+    if force or target is not None or _configured_cron_secret():
+        _require_cron_secret(request, secret, "Daily LINE send")
 
     if not force and target is None and not _within_auto_send_window():
         now = now_bkk()
@@ -2436,9 +2474,7 @@ def send_daily_line(
                 "preview": existing.get("preview", ""),
             }
 
-        has_token = bool(os.getenv("LINE_CHANNEL_ACCESS_TOKEN"))
-        has_group = bool(os.getenv("LINE_GROUP_ID_EVERLY") or os.getenv("LINE_GROUP_ID"))
-        if not (has_token and has_group):
+        if not _line_configured():
             raise HTTPException(503, "LINE not configured (set LINE_CHANNEL_ACCESS_TOKEN + LINE_GROUP_ID_EVERLY)")
 
         try:
@@ -2468,17 +2504,14 @@ def cron_run(
     target: Optional[str] = Query(None, description="Optional report date YYYY-MM-DD."),
     secret: Optional[str] = Query(None, description="Optional CRON_SECRET fallback for simple cron services."),
 ):
-    """Glow-style autonomous cron endpoint.
+    """Everly autonomous cron endpoint.
 
     Primary cron at 23:59 BKK reports the day that is ending. Backup cron runs
     after midnight report the previous complete day. Sending is idempotent per
     report date.
     """
-    expected_secret = os.getenv("CRON_SECRET", "")
-    if expected_secret:
-        supplied_secret = request.headers.get("x-cron-secret") or secret or ""
-        if supplied_secret != expected_secret:
-            raise HTTPException(401, "Invalid cron secret")
+    if force_daily or target is not None or _configured_cron_secret():
+        _require_cron_secret(request, secret, "Cron run")
 
     now = now_bkk()
     d = date.fromisoformat(target) if target else _cron_report_date(now)
@@ -2526,9 +2559,7 @@ def cron_run(
                 "preview": existing.get("preview", ""),
             }
 
-        has_token = bool(os.getenv("LINE_CHANNEL_ACCESS_TOKEN"))
-        has_group = bool(os.getenv("LINE_GROUP_ID_EVERLY") or os.getenv("LINE_GROUP_ID"))
-        if not (has_token and has_group):
+        if not _line_configured():
             raise HTTPException(503, "LINE not configured (set LINE_CHANNEL_ACCESS_TOKEN + LINE_GROUP_ID_EVERLY)")
 
         try:

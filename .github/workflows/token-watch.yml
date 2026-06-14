@@ -20,8 +20,16 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Check FB token expiry
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
           set -e
+          AUTH_HEADER=()
+          if [ -n "${CRON_SECRET:-}" ]; then
+            AUTH_HEADER=(-H "X-Cron-Secret: $CRON_SECRET")
+          else
+            echo "  ! CRON_SECRET GitHub secret not set; locked LINE alerts may be skipped"
+          fi
           # Pre-warm Render in case it's cold
           curl -s -o /dev/null --max-time 90 \
             "https://everly-clinic.onrender.com/api/health" || true
@@ -55,8 +63,13 @@ jobs:
             DECODED=$(printf '%s' "$MSG" | sed 's/%0A/\n/g')
             echo "Sending alert:"
             echo "$DECODED"
-            curl --fail --max-time 30 \
-              -X POST "https://everly-clinic.onrender.com/api/line/send" \
-              -H "Content-Type: application/json" \
-              -d "$(python3 -c "import json,sys; print(json.dumps({'text': sys.argv[1]}))" "$DECODED")"
+            if [ -n "${CRON_SECRET:-}" ]; then
+              curl --fail --max-time 30 \
+                -X POST "https://everly-clinic.onrender.com/api/line/send" \
+                -H "Content-Type: application/json" \
+                "${AUTH_HEADER[@]}" \
+                -d "$(python3 -c "import json,sys; print(json.dumps({'text': sys.argv[1]}))" "$DECODED")"
+            else
+              echo "(LINE alert skipped — CRON_SECRET GitHub secret is not set)"
+            fi
           fi

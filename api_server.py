@@ -2197,8 +2197,8 @@ def _daily_recommendation_lines(ads: list[dict]) -> list[str]:
     )
     if scale:
         lines.append(
-            f"เพิ่มงบแบบค่อยเป็นค่อยไป: {scale['campaign']} — "
-            f"ROAS {scale['roas']:.2f}x / {scale['result']} คนทัก"
+            f"เพิ่มงบ: {scale['campaign']}\n"
+            f"   เหตุผล: MTD ROAS {scale['roas']:.2f}x / {scale['result']} คนทัก"
         )
 
     test = next(
@@ -2207,7 +2207,8 @@ def _daily_recommendation_lines(ads: list[dict]) -> list[str]:
     )
     if test and test is not scale:
         lines.append(
-            f"เปิดเทสต์ต่อ: {test['campaign']} — ROAS {test['roas']:.2f}x แต่ sample ยังน้อย"
+            f"เปิดเทสต์ต่อ: {test['campaign']}\n"
+            f"   เหตุผล: MTD ROAS {test['roas']:.2f}x แต่ sample ยังน้อย"
         )
 
     watch = next(
@@ -2217,7 +2218,8 @@ def _daily_recommendation_lines(ads: list[dict]) -> list[str]:
     )
     if watch:
         lines.append(
-            f"เช็กด่วน: {watch['campaign']} — คนทัก {watch['result']} แต่ยอดขายในระบบ {_fmt_money(watch['conversion'])}"
+            f"เช็กด่วน: {watch['campaign']}\n"
+            f"   เหตุผล: MTD คนทัก {watch['result']} แต่ยอดขายในระบบ {_fmt_money(watch['conversion'])}"
         )
 
     expensive = next(
@@ -2227,7 +2229,8 @@ def _daily_recommendation_lines(ads: list[dict]) -> list[str]:
     )
     if expensive:
         lines.append(
-            f"เฝ้าระวัง/แก้ creative: {expensive['campaign']} — ค่าทัก {_fmt_money(expensive['cost_per_result'])}"
+            f"เฝ้าระวัง/แก้ creative: {expensive['campaign']}\n"
+            f"   เหตุผล: MTD ค่าทัก {_fmt_money(expensive['cost_per_result'])}"
         )
 
     pause_names = [
@@ -2235,7 +2238,10 @@ def _daily_recommendation_lines(ads: list[dict]) -> list[str]:
         if a.get("spent", 0) >= 300 and a.get("result", 0) == 0 and a.get("conversion", 0) == 0
     ][:2]
     if pause_names:
-        lines.append(f"ควรปิด/พัก: {', '.join(pause_names)} เพราะใช้เงินแล้วไม่เกิดคนทัก/ยอดขาย")
+        lines.append(
+            f"ควรปิด/พัก: {', '.join(pause_names)}\n"
+            "   เหตุผล: MTD ใช้เงินแล้วไม่เกิดคนทัก/ยอดขาย"
+        )
 
     return lines or ["คำแนะนำ: ยังไม่มีตัวที่ชัดพอให้เพิ่มงบหรือปิด ให้เก็บข้อมูลต่ออีก 24 ชม."]
 
@@ -2270,31 +2276,34 @@ def _build_daily_text(target_d: date) -> str:
 
     L = []
     L.append("EVERLY CLINIC — DAILY REPORT")
-    L.append("")
-    L.append(f"Report ประจำวัน ({_thai_date(target_d)})")
-    L.append("")
-    L.append(f"วันที่รายงาน ใช้เงิน: ฿{sel_spend:,.2f}")
-    L.append(f"คนทัก: {sel_inbox} คน")
-    L.append(f"เฉลี่ยต่อคนทัก: ฿{sel_cpr:,}" if sel_inbox else "เฉลี่ยต่อคนทัก: —")
-    L.append(f"ยอดขาย: ฿{round(sel_conv):,}")
-    L.append(f"กำไร/ขาดทุน: {_fmt_pl(day_profit)}")
+    L.append(f"วันที่รายงาน: {_thai_date(target_d)}")
+    L.append(f"เกณฑ์วัดผลแอด: MTD {_thai_range(month_start, target_d)}")
     L.append("")
     L.append("============")
-    L.append(f"Report สะสมตั้งแต่ต้นเดือน - ถึงวันที่รายงาน ({_thai_range(month_start, target_d)})")
-    L.append("")
-    L.append(f"ภาพรวม ใช้เงินรวม: ฿{round(mtd_spend):,}")
-    L.append(f"เฉลี่ยต่อวัน: ฿{avg_daily:,}")
-    L.append(f"คนทักรวม: {mtd_inbox} คน")
-    L.append(f"เฉลี่ยต่อคนทัก: ฿{mtd_cpr:,}" if mtd_inbox else "เฉลี่ยต่อคนทัก: —")
-    L.append(f"ยอดขาย: ฿{round(mtd_conv):,}")
-    L.append(f"กำไร/ขาดทุน: {_fmt_pl(mtd_profit)}")
+    L.append("1) วันนี้")
+    L.append(f"- ใช้เงิน: ฿{sel_spend:,.2f}")
+    L.append(f"- คนทัก: {sel_inbox} คน")
+    L.append(f"- เฉลี่ยต่อคนทัก: ฿{sel_cpr:,}" if sel_inbox else "- เฉลี่ยต่อคนทัก: —")
+    L.append(f"- ยอดขาย: ฿{round(sel_conv):,}")
+    L.append(f"- กำไร/ขาดทุน: {_fmt_pl(day_profit)}")
     L.append("")
     L.append("============")
-
-    L.append("Analysis Dashboard:")
+    L.append("2) สะสมเดือนนี้")
+    L.append(f"- ช่วงข้อมูล: {_thai_range(month_start, target_d)}")
+    L.append(f"- ใช้เงินรวม: ฿{round(mtd_spend):,}")
+    L.append(f"- เฉลี่ยต่อวัน: ฿{avg_daily:,}")
+    L.append(f"- คนทักรวม: {mtd_inbox} คน")
+    L.append(f"- เฉลี่ยต่อคนทัก: ฿{mtd_cpr:,}" if mtd_inbox else "- เฉลี่ยต่อคนทัก: —")
+    L.append(f"- ยอดขาย: ฿{round(mtd_conv):,}")
+    L.append(f"- กำไร/ขาดทุน: {_fmt_pl(mtd_profit)}")
+    L.append(f"- ROAS เดือนนี้: {(mtd_conv / mtd_spend if mtd_spend else 0):.2f}x")
+    L.append("")
+    L.append("============")
+    L.append("3) ลิงก์วิเคราะห์")
     L.append("https://everly-clinic.onrender.com/analysis")
     L.append("")
-    L.append("คำแนะนำสั้น ๆ:")
+    L.append("============")
+    L.append("4) Action แนะนำ")
     try:
         top_ads = everly_top_ads_range(
             since=month_start.isoformat(),
@@ -2305,6 +2314,10 @@ def _build_daily_text(target_d: date) -> str:
     except Exception as e:
         L.append(f"คำแนะนำ: ยังประเมิน Top Ads ไม่ได้จาก API รอบนี้ ({str(e)[:80]})")
     L.append("")
+    L.append("============")
+    L.append("5) หมายเหตุ")
+    L.append("- คำแนะนำวัดจากข้อมูล MTD ตั้งแต่วันที่ 1 ถึงวันที่รายงาน")
+    L.append("- ถ้ายอดขายจริงมีแต่ระบบไม่จับ ให้เช็ก tracking/การบันทึกยอดขายก่อนตัดสินใจปิดแอด")
     L.append("============")
     return "\n".join(L)
 

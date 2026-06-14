@@ -448,6 +448,95 @@ def everly_summary(
     return response
 
 
+@app.get("/api/everly/monthly-trend")
+def everly_monthly_trend(
+    since: Optional[str] = Query(None, description="YYYY-MM-DD; defaults to Feb 1 of current year"),
+    until: Optional[str] = Query(None, description="YYYY-MM-DD; defaults to today"),
+):
+    """Monthly aggregated KPIs for the analysis view."""
+    today = today_bkk()
+    default_since = date(today.year, 2, 1)
+    s = date.fromisoformat(since) if since else default_since
+    u = date.fromisoformat(until) if until else today
+
+    try:
+        records = _fetch_range(s, u)
+    except Exception as e:
+        snapshot = _read_summary_snapshot(s, u)
+        if not (snapshot and snapshot.get("days")):
+            raise HTTPException(status_code=502, detail=f"Meta API error: {e}")
+        records = [{"date": d["date"], "ads": [{
+            "spent": d.get("spent", 0),
+            "result": d.get("result", 0),
+            "conversion": d.get("conversion", 0),
+            "impression": d.get("impression", 0),
+            "reach": d.get("reach", 0),
+            "cpm": d.get("cpm", 0),
+            "ctr": d.get("ctr", 0),
+            "frequency": d.get("frequency", 0),
+            "roas": d.get("roas", 0),
+            "cost_per_result": d.get("cost_per_result", 0),
+            "campaign": d.get("top_campaign", ""),
+        }]} for d in snapshot["days"]]
+
+    months: dict[str, dict] = {}
+    for day in (_day_totals(r) for r in records):
+        if not day:
+            continue
+        key = day["date"][:7]
+        row = months.setdefault(key, {
+            "key": key,
+            "spend": 0.0,
+            "result": 0,
+            "conv": 0.0,
+            "revenue": 0.0,
+            "impr": 0,
+            "reach": 0,
+            "n": 0,
+        })
+        row["spend"] += day["spent"]
+        row["result"] += day["result"]
+        row["conv"] += day["conversion"]
+        row["revenue"] += day["conversion"]
+        row["impr"] += day["impression"]
+        row["reach"] += day["reach"]
+        row["n"] += 1
+
+    rows = []
+    for row in sorted(months.values(), key=lambda x: x["key"]):
+        spend = row["spend"]
+        result = row["result"]
+        conv = row["conv"]
+        key = row["key"]
+        rows.append({
+            **row,
+            "spend": round(spend, 2),
+            "conv": round(conv, 2),
+            "revenue": round(conv, 2),
+            "monthIdx": int(key[5:7]) - 1,
+            "year": int(key[:4]),
+            "roas": round((conv / spend) if spend else 0, 2),
+            "cpi": round((spend / result) if result else 0, 2),
+            "net": round(conv - spend, 2),
+        })
+
+    mock = _mock_data_enabled()
+    return {
+        "brand": "Everly Clinic",
+        "account_id": ACCOUNT_ID,
+        "account_locked": ACCOUNT_ID == "1965556974211662",
+        "mock": mock,
+        "mock_mode": mock,
+        "source": "mock" if mock else "meta_api",
+        "since": s.isoformat(),
+        "until": u.isoformat(),
+        "n_months": len(rows),
+        "months": rows,
+        "cache_ttl_sec": TTL,
+        "fetched_at": now_bkk().isoformat(),
+    }
+
+
 def _resolve_target_date(target: Optional[str], date_value: Optional[str], default: date) -> date:
     return date.fromisoformat(target or date_value) if (target or date_value) else default
 

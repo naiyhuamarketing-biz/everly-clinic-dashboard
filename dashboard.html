@@ -1295,9 +1295,13 @@ async function fetchTrend() {
   }
   try {
     const [since, until] = allTimeRange();
-    const j = await apiGet(`/api/everly/summary?since=${since}&until=${until}`);
+    const j = await apiGet(`/api/everly/monthly-trend?since=${since}&until=${until}`);
     setLive('tr', j.mock ? 'mock' : 'live');
-    const months = aggregateByMonth(j.days);
+    const months = (j.months || []).map(m => ({
+      ...m,
+      roas: Number(m.roas || 0),
+      cpi: Number(m.cpi || 0),
+    }));
     if (!months.length) {
       if (cardsEl) cardsEl.innerHTML = `<div class="card p-5 col-span-2 md:col-span-4 text-sm" style="color:var(--soft)">ยังไม่มีข้อมูลรายเดือนในช่วงที่เลือก</div>`;
       return;

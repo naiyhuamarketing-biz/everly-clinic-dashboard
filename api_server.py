@@ -2354,30 +2354,6 @@ def _build_daily_text(target_d: date) -> str:
     L.append(f"- ยอดขาย: ฿{round(mtd_conv):,}")
     L.append(f"- กำไร/ขาดทุน: {_fmt_pl(mtd_profit)}")
     L.append(f"- ROAS เดือนนี้: {(mtd_conv / mtd_spend if mtd_spend else 0):.2f}x")
-    L.append("")
-    L.append("============")
-    L.append("4) Action แนะนำ")
-    try:
-        top_ads = everly_top_ads_range(
-            since=month_start.isoformat(),
-            until=target_d.isoformat(),
-            limit=20,
-        ).get("ads", [])
-        recommendations = _daily_recommendation_lines(top_ads)
-        for i, item in enumerate(recommendations):
-            if i:
-                L.append("")
-            L.append(item)
-    except Exception as e:
-        L.append(f"คำแนะนำ: ยังประเมิน Top Ads ไม่ได้จาก API รอบนี้ ({str(e)[:80]})")
-    L.append("")
-    L.append("============")
-    L.append("5) หมายเหตุ")
-    L.append("- คำแนะนำวัดจากข้อมูล MTD ตั้งแต่วันที่ 1 ถึงวันที่รายงาน")
-    L.append("- Action แนะนำรายงานเฉพาะแอดที่ Active เท่านั้น")
-    L.append("- M = Message วัดจากคนทัก/ROAS")
-    L.append("- F = Follow และ E = Engagement วัดจากต้นทุนเทียบค่าเฉลี่ย ไม่ใช้เกณฑ์คนทัก/ยอดขาย")
-    L.append("- ถ้ายอดขายจริงมีแต่ระบบไม่จับ ให้เช็ก tracking/การบันทึกยอดขายก่อนตัดสินใจปิดแอด")
     L.append("============")
     return "\n".join(L)
 

@@ -1,9 +1,9 @@
 name: Daily LINE notification
 
-# Fires every day at 00:00 Bangkok time (17:00 UTC).
-# Backup retries fire from midnight through early morning. The API has a
-# per-date idempotency guard, so the backup run skips if the main run already
-# sent the report.
+# Fires every day around midnight Bangkok time (17:00 UTC).
+# GitHub can delay/drop scheduled jobs near the top of the hour, so the
+# midnight hour retries every 5 minutes. The API has a per-date idempotency
+# guard, so backup runs skip if an earlier run already sent the report.
 # Free on GitHub Actions for public repos — runs on GitHub's servers,
 # does NOT depend on the user's Mac being on.
 #
@@ -13,10 +13,7 @@ name: Daily LINE notification
 #   - Concurrency lock so two cron firings don't double-send
 on:
   schedule:
-    - cron: '0 17 * * *'   # 00:00 BKK
-    - cron: '9 17 * * *'   # 00:09 BKK backup retry for previous day
-    - cron: '29 17 * * *'  # 00:29 BKK backup retry
-    - cron: '49 17 * * *'  # 00:49 BKK backup retry
+    - cron: '*/5 17 * * *' # 00:00-00:55 BKK retries every 5 minutes
     - cron: '20 18 * * *'  # 01:20 BKK backup for GitHub queue delay
     - cron: '20 19 * * *'  # 02:20 BKK backup for GitHub queue delay
     - cron: '20 20 * * *'  # 03:20 BKK backup for GitHub queue delay

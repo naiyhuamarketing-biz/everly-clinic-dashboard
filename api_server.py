@@ -385,6 +385,23 @@ def _read_sent_state() -> dict:
             "sent_at": "2026-06-15T00:28:41.929213+07:00",
             "line_retry_key": "manual-before-retry-key",
             "preview": "EVERLY CLINIC — DAILY REPORT",
+        },
+        # One-time incident markers: the 2026-06-22 reports were sent while
+        # front LINE hardening was being deployed. Keep them suppressed even
+        # if Render restarts and loses /tmp state.
+        "2026-06-22": {
+            "sent_at": "2026-06-23T00:02:18.279887+07:00",
+            "line_retry_key": _daily_line_retry_key(date(2026, 6, 22)),
+            "preview": "EVERLY CLINIC — DAILY REPORT",
+        },
+        "front-line:2026-06-22": {
+            "status": "sent",
+            "date": "2026-06-22",
+            "attempt_id": "front-manual-1782150465-958399",
+            "updated_at": "2026-06-23T00:47:45.476916+07:00",
+            "template_version": FRONT_REPORT_TEMPLATE_VERSION,
+            "sent_at": "2026-06-23T00:47:45.476932+07:00",
+            "preview": "EVERLY CLINIC — CLIENT DAILY REPORT",
         }
     }
     try:
@@ -576,6 +593,10 @@ def _remember_line_group(group_id: str, event_type: str) -> None:
 
 def _daily_line_retry_key(report_date: date) -> str:
     return str(uuid.uuid5(uuid.NAMESPACE_URL, f"everly-clinic-daily-line:{report_date.isoformat()}"))
+
+
+def _front_line_retry_key(report_date: date) -> str:
+    return str(uuid.uuid5(uuid.NAMESPACE_URL, f"everly-clinic-front-line:{report_date.isoformat()}"))
 
 
 def _summary_snapshot_path(since: date, until: date) -> Path:
@@ -2416,6 +2437,9 @@ def line_status():
         "fallback_group_present_but_ignored": has_fallback_group,
         "manual_send_locked": True,
         "cron_secret_configured": has_secret,
+        "daily_retry_key_protection": True,
+        "front_retry_key_protection": True,
+        "state_storage": _state_storage_info(),
     }
 
 
@@ -2461,6 +2485,68 @@ def line_webhook_config():
             "has_channel_secret": bool(os.getenv("LINE_CHANNEL_SECRET")),
             "error": str(e)[:220],
         }
+
+
+@app.post("/api/line/webhook-config/sync")
+def line_webhook_config_sync(
+    request: Request,
+    dry_run: bool = Query(True),
+    secret: Optional[str] = Query(None, description="CRON_SECRET required to update LINE webhook URL."),
+):
+    """Point the LINE Messaging API webhook endpoint back to Everly production.
+
+    This updates only the webhook URL. LINE_CHANNEL_SECRET is still required in
+    Render before incoming LINE events such as CF can be verified safely.
+    """
+    _require_cron_secret(request, secret, "LINE webhook sync")
+    token = os.getenv("LINE_CHANNEL_ACCESS_TOKEN", "")
+    expected = _canonical_line_webhook_url()
+    if not token:
+        raise HTTPException(503, "LINE_CHANNEL_ACCESS_TOKEN is required before webhook sync")
+
+    import requests
+
+    before_response = requests.get(
+        "https://api.line.me/v2/bot/channel/webhook/endpoint",
+        headers={"Authorization": f"Bearer {token}"},
+        timeout=10,
+    )
+    before = before_response.json() if before_response.text else {}
+    if dry_run:
+        return {
+            "ok": True,
+            "dry_run": True,
+            "expected_endpoint": expected,
+            "current_endpoint": before.get("endpoint"),
+            "current_active": before.get("active"),
+            "matches_expected": before.get("endpoint") == expected,
+            "has_channel_secret": bool(os.getenv("LINE_CHANNEL_SECRET")),
+        }
+
+    update_response = requests.put(
+        "https://api.line.me/v2/bot/channel/webhook/endpoint",
+        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+        json={"endpoint": expected},
+        timeout=10,
+    )
+    after_response = requests.get(
+        "https://api.line.me/v2/bot/channel/webhook/endpoint",
+        headers={"Authorization": f"Bearer {token}"},
+        timeout=10,
+    )
+    after = after_response.json() if after_response.text else {}
+    return {
+        "ok": 200 <= update_response.status_code < 300 and after.get("endpoint") == expected,
+        "dry_run": False,
+        "http_status": update_response.status_code,
+        "expected_endpoint": expected,
+        "before_endpoint": before.get("endpoint"),
+        "after_endpoint": after.get("endpoint"),
+        "active": after.get("active"),
+        "matches_expected": after.get("endpoint") == expected,
+        "has_channel_secret": bool(os.getenv("LINE_CHANNEL_SECRET")),
+        "line_response": update_response.text[:220],
+    }
 
 
 @app.get("/api/line/discovered-groups")
@@ -2595,7 +2681,7 @@ def _handle_front_cf_command(group_id: str, reply_token: Optional[str]) -> dict:
     _mark_front_line(report_date, "sending", attempt_id)
     try:
         from lib.notify import send_line_to_group_env
-        ok = send_line_to_group_env(text, "LINE_GROUP_ID_EVERLY_FRONT")
+        ok = send_line_to_group_env(text, "LINE_GROUP_ID_EVERLY_FRONT", retry_key=_front_line_retry_key(report_date))
     except Exception:
         ok = False
     if not ok:
@@ -2952,6 +3038,7 @@ def front_line_status():
         "cf_required": True,
         "safe_for_front_group": True,
         "state_storage": _state_storage_info(),
+        "front_retry_key_protection": True,
         "latest_front_markers": dict(sorted(front_markers.items())[-5:]),
         "latest_review_markers": dict(sorted(review_markers.items())[-5:]),
     }
@@ -3057,6 +3144,8 @@ def front_line_send_diagnostic(
             "reason": "already_sent" if existing and not force else "secret_required_for_actual_send",
             "date": d.isoformat(),
             "already_sent": bool(existing),
+            "line_retry_key": _front_line_retry_key(d),
+            "line_retry_key_protection": True,
             "line_configured": _front_line_configured(),
             "safe_for_front_group": True,
             "preview": text[:1600] + ("..." if len(text) > 1600 else ""),
@@ -3078,7 +3167,7 @@ def front_line_send_diagnostic(
     attempt_id = f"front-manual-{int(time.time())}-{random.randrange(100000, 999999)}"
     _mark_front_line(d, "sending", attempt_id)
     from lib.notify import send_line_to_group_env
-    ok = send_line_to_group_env(text, "LINE_GROUP_ID_EVERLY_FRONT")
+    ok = send_line_to_group_env(text, "LINE_GROUP_ID_EVERLY_FRONT", retry_key=_front_line_retry_key(d))
     if not ok:
         _mark_front_line(d, "failed", attempt_id, reason="LINE push failed")
         raise HTTPException(502, "Front LINE push failed")
@@ -3089,6 +3178,7 @@ def front_line_send_diagnostic(
         "front_report": "sent",
         "date": d.isoformat(),
         "sent_at": now_bkk().isoformat(),
+        "line_retry_key": _front_line_retry_key(d),
         "safe_for_front_group": True,
         "preview": text[:220] + ("..." if len(text) > 220 else ""),
     }
@@ -3206,9 +3296,11 @@ def cron_run(
             "daily_report": "would_send" if (force_daily or (within_window and not existing)) else "would_skip",
             "date": d.isoformat(),
             "line_retry_key": _daily_line_retry_key(d),
+            "line_retry_key_protection": True,
             "now_bkk": now.isoformat(),
             "within_window": within_window,
             "already_sent": bool(existing),
+            "state_storage": _state_storage_info(),
             "auth_mode": auth_mode,
             "preview": preview,
         }

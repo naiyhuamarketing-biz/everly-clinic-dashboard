@@ -335,6 +335,37 @@ def _require_cron_secret(request: Request, secret: Optional[str] = None, action:
         raise HTTPException(401, "Invalid cron secret")
 
 
+def _authorization_bearer(request: Request) -> str:
+    auth = request.headers.get("authorization", "").strip()
+    prefix = "bearer "
+    if auth.lower().startswith(prefix):
+        return auth[len(prefix):].strip()
+    return ""
+
+
+def _require_line_router_auth(request: Request, secret: Optional[str] = None) -> str:
+    """Authorize the shared LINE router without making it store Everly cron secret.
+
+    Preferred auth is Everly's CRON_SECRET. For the shared LINE router, the
+    channel access token is also accepted because only the LINE router should
+    already possess that token, and this endpoint still verifies Everly groupId
+    before sending anything to the front group.
+    """
+    supplied = _supplied_cron_secret(request, secret)
+    cron_secret = _configured_cron_secret()
+    if cron_secret and supplied and hmac.compare_digest(supplied, cron_secret):
+        return "cron_secret"
+
+    bearer = _authorization_bearer(request)
+    line_token = os.getenv("LINE_CHANNEL_ACCESS_TOKEN", "").strip()
+    if line_token and bearer and hmac.compare_digest(bearer, line_token):
+        return "line_channel_token"
+
+    if not cron_secret and not line_token:
+        raise HTTPException(503, "Everly LINE router auth is not configured")
+    raise HTTPException(401, "Invalid Everly LINE router auth")
+
+
 def _cron_secret_optional_for_default_automation(
     request: Request,
     secret: Optional[str],
@@ -2736,7 +2767,7 @@ def everly_line_router_command(
     message text, and optionally replyToken. This keeps other brands from being
     overwritten by Everly's webhook setting.
     """
-    _require_cron_secret(request, secret, "Everly LINE router command")
+    auth_mode = _require_line_router_auth(request, secret)
     if not isinstance(payload, dict):
         raise HTTPException(400, "JSON body required")
 
@@ -2760,14 +2791,15 @@ def everly_line_router_command(
                 "หน้าบ้าน Everly ใช้ LINE_GROUP_ID_EVERLY_FRONT",
             ]),
         )
-        return {"ok": True, "brand": "Everly Clinic", "command": "test", "group_id": group_id}
+        return {"ok": True, "brand": "Everly Clinic", "command": "test", "group_id": group_id, "auth_mode": auth_mode}
     if _is_cf_command(text):
         return {
             "brand": "Everly Clinic",
             "command": "CF",
+            "auth_mode": auth_mode,
             **_handle_front_cf_command(group_id, reply_token),
         }
-    return {"ok": True, "brand": "Everly Clinic", "command": "ignored", "group_id": group_id}
+    return {"ok": True, "brand": "Everly Clinic", "command": "ignored", "group_id": group_id, "auth_mode": auth_mode}
 
 
 @app.post("/line/webhook")

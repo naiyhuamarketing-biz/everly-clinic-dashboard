@@ -11,7 +11,7 @@ on:
   workflow_dispatch:  # manual trigger from GitHub UI
 
 concurrency:
-  group: daily-line
+  group: everly-daily-line
   cancel-in-progress: false  # let pending runs finish (don't lose a daily report)
 
 jobs:

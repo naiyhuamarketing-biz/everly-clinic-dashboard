@@ -61,7 +61,7 @@ SENT_STATE_FILE = Path(os.getenv("SENT_STATE_FILE") or (_default_state_dir() / "
 SUMMARY_SNAPSHOT_DIR = Path(os.getenv("SUMMARY_SNAPSHOT_DIR") or (_default_state_dir() / "everly-summary-snapshots"))
 LINE_DISCOVERY_FILE = Path(os.getenv("LINE_DISCOVERY_FILE") or (_default_state_dir() / "everly-line-groups.json"))
 SEND_DAILY_LINE_LOCK = threading.Lock()
-FRONT_REPORT_TEMPLATE_VERSION = "everly-client-daily-v1"
+FRONT_REPORT_TEMPLATE_VERSION = "everly-client-daily-v2"
 
 # Mount /assets so brand logos (assets/logos/everly.png etc.) are served
 # directly by FastAPI — used by <img src="/assets/logos/..."> in dashboard.html
@@ -596,7 +596,10 @@ def _daily_line_retry_key(report_date: date) -> str:
 
 
 def _front_line_retry_key(report_date: date) -> str:
-    return str(uuid.uuid5(uuid.NAMESPACE_URL, f"everly-clinic-front-line:{report_date.isoformat()}"))
+    return str(uuid.uuid5(
+        uuid.NAMESPACE_URL,
+        f"everly-clinic-front-line:{FRONT_REPORT_TEMPLATE_VERSION}:{report_date.isoformat()}",
+    ))
 
 
 def _summary_snapshot_path(since: date, until: date) -> Path:
@@ -2970,14 +2973,18 @@ def _build_front_line_text(target_d: date) -> str:
     L.append(f"เกณฑ์วัดผลแอด: MTD {_thai_range(month_start, target_d)}")
     L.append("")
     L.append("============")
-    L.append("1) วันนี้")
+    L.append("1) ลิงก์วิเคราะห์")
+    L.append("https://everly-clinic.onrender.com/analysis")
+    L.append("")
+    L.append("============")
+    L.append("2) วันนี้")
     L.append(f"- ใช้เงิน: ฿{sel_spend:,.2f}")
     L.append(f"- คนทัก: {sel_inbox} คน")
     L.append(f"- เฉลี่ยต่อคนทัก: ฿{sel_cpr:,}" if sel_inbox else "- เฉลี่ยต่อคนทัก: —")
     L.append(f"- ยอดขายจากระบบ: ฿{round(sel_conv):,}")
     L.append("")
     L.append("============")
-    L.append("2) สะสมเดือนนี้")
+    L.append("3) สะสมเดือนนี้")
     L.append(f"- ช่วงข้อมูล: {_thai_range(month_start, target_d)}")
     L.append(f"- ใช้เงินรวม: ฿{round(mtd_spend):,}")
     L.append(f"- เฉลี่ยต่อวัน: ฿{avg_daily:,}")
@@ -2985,16 +2992,6 @@ def _build_front_line_text(target_d: date) -> str:
     L.append(f"- เฉลี่ยต่อคนทัก: ฿{mtd_cpr:,}" if mtd_inbox else "- เฉลี่ยต่อคนทัก: —")
     L.append(f"- ยอดขายจากระบบ: ฿{round(mtd_conv):,}")
     L.append(f"- ROAS เดือนนี้: {mtd_roas:.2f}x")
-    L.append("")
-    L.append("============")
-    L.append("3) หมายเหตุจากทีม")
-    if sel_spend == 0:
-        L.append("- วันนี้ระบบโฆษณายังไม่เกิดยอดใช้จ่าย ทีมกำลังตรวจสอบการส่งมอบแอด")
-    elif sel_inbox == 0:
-        L.append("- วันนี้มีการใช้งบแล้ว แต่ยังไม่มีคนทักในระบบ ทีมกำลังดูคุณภาพแคมเปญ")
-    else:
-        L.append("- ข้อมูลนี้ดึงจาก Meta Ads และอัปเดตตามรอบระบบ")
-    L.append("- รายงานนี้เป็นเวอร์ชันลูกค้า ตัดข้อมูลเทคนิคภายในออกแล้ว")
     L.append("============")
     return "\n".join(L)
 

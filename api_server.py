@@ -3039,20 +3039,58 @@ def review_front_line(
 
 @app.get("/api/everly/front-line/send")
 @app.post("/api/everly/front-line/send")
-def front_line_send_diagnostic(target: Optional[str] = Query(None), dry_run: bool = Query(True)):
+def front_line_send_diagnostic(
+    request: Request,
+    target: Optional[str] = Query(None),
+    dry_run: bool = Query(True),
+    force: bool = Query(False),
+    secret: Optional[str] = Query(None, description="Optional CRON_SECRET fallback for front LINE sends."),
+):
     d = date.fromisoformat(target) if target else _default_report_date()
     existing = _front_line_marker(d)
     text = _build_front_line_text(d)
+    if dry_run:
+        return {
+            "ok": True,
+            "dry_run": True,
+            "front_report": "would_send" if (force or not existing) else "would_skip",
+            "reason": "already_sent" if existing and not force else "secret_required_for_actual_send",
+            "date": d.isoformat(),
+            "already_sent": bool(existing),
+            "line_configured": _front_line_configured(),
+            "safe_for_front_group": True,
+            "preview": text[:1600] + ("..." if len(text) > 1600 else ""),
+        }
+
+    _require_cron_secret(request, secret, "Everly front LINE send")
+    if existing and existing.get("status") == "sent" and not force:
+        return {
+            "ok": True,
+            "skipped": True,
+            "front_report": "already_sent",
+            "date": d.isoformat(),
+            "sent_at": existing.get("sent_at"),
+            "preview": existing.get("preview", ""),
+        }
+    if not _front_line_configured():
+        raise HTTPException(503, "Front LINE not configured (set LINE_CHANNEL_ACCESS_TOKEN + LINE_GROUP_ID_EVERLY_FRONT)")
+
+    attempt_id = f"front-manual-{int(time.time())}-{random.randrange(100000, 999999)}"
+    _mark_front_line(d, "sending", attempt_id)
+    from lib.notify import send_line_to_group_env
+    ok = send_line_to_group_env(text, "LINE_GROUP_ID_EVERLY_FRONT")
+    if not ok:
+        _mark_front_line(d, "failed", attempt_id, reason="LINE push failed")
+        raise HTTPException(502, "Front LINE push failed")
+    _mark_front_line(d, "sent", attempt_id, preview=text)
     return {
         "ok": True,
-        "dry_run": True,
-        "front_report": "would_skip",
-        "reason": "front_line_requires_back_office_CF",
+        "skipped": False,
+        "front_report": "sent",
         "date": d.isoformat(),
-        "already_sent": bool(existing),
-        "line_configured": _front_line_configured(),
+        "sent_at": now_bkk().isoformat(),
         "safe_for_front_group": True,
-        "preview": text[:1600] + ("..." if len(text) > 1600 else ""),
+        "preview": text[:220] + ("..." if len(text) > 220 else ""),
     }
 
 

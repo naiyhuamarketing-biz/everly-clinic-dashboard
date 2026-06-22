@@ -1,26 +1,9 @@
 name: Daily LINE notification
 
-# Fires every day at 23:59 Bangkok time (16:59 UTC).
-# GitHub can delay/drop scheduled jobs near the top of the hour, so the
-# midnight hour retries every 5 minutes. The API has a per-date idempotency
-# guard, so backup runs skip if an earlier run already sent the report.
-# Free on GitHub Actions for public repos — runs on GitHub's servers,
-# does NOT depend on the user's Mac being on.
-#
-# Reliability features:
-#   - Pre-warm Render dyno before sending (avoids cold-start timeout)
-#   - 5-retry policy with exponential backoff
-#   - Concurrency lock so two cron firings don't double-send
+# Schedule disabled: Everly midnight LINE delivery now runs through the
+# production cron sender with persistent state and duplicate-send protection.
+# Keep workflow_dispatch only for manual debugging.
 on:
-  schedule:
-    - cron: '59 16 * * *' # 23:59 BKK primary send for the day that just ended
-    - cron: '*/5 17 * * *' # 00:00-00:55 BKK retries every 5 minutes
-    - cron: '20 18 * * *'  # 01:20 BKK backup for GitHub queue delay
-    - cron: '20 19 * * *'  # 02:20 BKK backup for GitHub queue delay
-    - cron: '20 20 * * *'  # 03:20 BKK backup for GitHub queue delay
-    - cron: '20 21 * * *'  # 04:20 BKK backup for GitHub queue delay
-    - cron: '20 22 * * *'  # 05:20 BKK backup for GitHub queue delay
-    - cron: '20 23 * * *'  # 06:20 BKK backup for GitHub queue delay
   workflow_dispatch:  # manual trigger from GitHub UI
 
 concurrency:
@@ -52,7 +35,8 @@ jobs:
           if [ -n "${CRON_SECRET:-}" ]; then
             AUTH_HEADER=(-H "X-Cron-Secret: $CRON_SECRET")
           else
-            echo "  ! CRON_SECRET GitHub secret not set; calling cron without secret"
+            echo "  ✗ CRON_SECRET GitHub secret is required"
+            exit 1
           fi
           for i in 1 2 3 4 5; do
             echo "attempt $i ..."

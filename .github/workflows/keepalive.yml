@@ -2,18 +2,13 @@ name: Light health ping
 
 # Pings the keepalive endpoint:
 #   1. Confirms Render is reachable
-#   2. Provides an independent daily LINE backup during the midnight window
-#      via /api/everly/keepalive's idempotent auto-send check
+#   2. Does not send LINE reports; midnight delivery is handled by the
+#      production cron sender with persistent state.
 #
 on:
   schedule:
     # Every 6 hours for general health.
     - cron: '0 */6 * * *'
-    # Midnight BKK backup window. This workflow has been more reliable than
-    # the dedicated daily-line workflow, and the API prevents duplicate sends.
-    - cron: '59 16 * * *' # 23:59 BKK
-    - cron: '*/5 17 * * *' # 00:00-00:55 BKK
-    - cron: '20 18 * * *'  # 01:20 BKK
   workflow_dispatch:
 
 # Cancel pending pings if a new one starts (avoid pile-up)
@@ -35,7 +30,8 @@ jobs:
           if [ -n "${CRON_SECRET:-}" ]; then
             AUTH_HEADER=(-H "X-Cron-Secret: $CRON_SECRET")
           else
-            echo "  ! CRON_SECRET GitHub secret not set; calling keepalive without secret"
+            echo "  ✗ CRON_SECRET GitHub secret is required"
+            exit 1
           fi
           # Allow up to 90s for cold-start wake; ignore non-200 (don't fail action)
           STATUS=$(curl -s -o /tmp/body --max-time 90 -w "%{http_code}" \

@@ -376,6 +376,15 @@ def _front_line_configured() -> bool:
     return bool(os.getenv("LINE_CHANNEL_ACCESS_TOKEN") and os.getenv("LINE_GROUP_ID_EVERLY_FRONT"))
 
 
+def _line_webhook_sync_enabled() -> bool:
+    """Only direct, single-brand LINE channels may let this app own webhook URL.
+
+    Shared LINE channels must point to a central router; otherwise one brand
+    deploy can overwrite another brand's CF/test handling.
+    """
+    return os.getenv("ALLOW_LINE_WEBHOOK_SYNC", "").strip().lower() in {"1", "true", "yes"}
+
+
 def _read_sent_state() -> dict:
     state = {
         # One-time safety marker: this report was manually sent before the
@@ -2442,6 +2451,8 @@ def line_status():
         "cron_secret_configured": has_secret,
         "daily_retry_key_protection": True,
         "front_retry_key_protection": True,
+        "webhook_sync_enabled": _line_webhook_sync_enabled(),
+        "router_command_endpoint": "https://everly-clinic.onrender.com/api/everly/line-router-command",
         "state_storage": _state_storage_info(),
     }
 
@@ -2519,12 +2530,19 @@ def line_webhook_config_sync(
         return {
             "ok": True,
             "dry_run": True,
+            "sync_enabled": _line_webhook_sync_enabled(),
+            "mode": "brand_direct" if _line_webhook_sync_enabled() else "shared_router",
             "expected_endpoint": expected,
             "current_endpoint": before.get("endpoint"),
             "current_active": before.get("active"),
             "matches_expected": before.get("endpoint") == expected,
             "has_channel_secret": bool(os.getenv("LINE_CHANNEL_SECRET")),
         }
+    if not _line_webhook_sync_enabled():
+        raise HTTPException(
+            409,
+            "LINE webhook sync is disabled for shared-router safety. Set ALLOW_LINE_WEBHOOK_SYNC=true only for a dedicated Everly LINE channel.",
+        )
 
     update_response = requests.put(
         "https://api.line.me/v2/bot/channel/webhook/endpoint",
@@ -2662,20 +2680,27 @@ def _handle_front_cf_command(group_id: str, reply_token: Optional[str]) -> dict:
         return {"ok": False, "reason": "front_group_same_as_back"}
 
     pending = _latest_front_review_pending()
-    if not pending:
-        _reply_if_possible(reply_token, "ยังไม่มีรายงานหน้าบ้านที่รอ CF ครับ ให้ส่ง preview เข้าหลังบ้านก่อน")
-        return {"ok": False, "reason": "no_pending_review"}
-    if pending.get("template_version") != FRONT_REPORT_TEMPLATE_VERSION:
+    if pending and pending.get("template_version") != FRONT_REPORT_TEMPLATE_VERSION:
         _reply_if_possible(reply_token, "preview หน้าบ้านเป็นเวอร์ชันเก่าแล้วครับ ให้ส่ง preview ใหม่ก่อนแล้วค่อย CF")
         return {"ok": False, "reason": "template_version_mismatch"}
 
-    report_date = date.fromisoformat(pending["date"])
+    if pending:
+        report_date = date.fromisoformat(pending["date"])
+        text = str(pending.get("text") or "").strip()
+        source = "pending_review"
+    else:
+        # Render free instances can restart and lose /tmp pending state. CF from
+        # the verified back-office group should still rebuild the safe client
+        # report for the current report date instead of silently failing.
+        report_date = _default_report_date()
+        text = _build_front_line_text(report_date)
+        source = "rebuilt_on_cf"
+
     existing = _front_line_marker(report_date)
     if existing and existing.get("status") == "sent":
         _reply_if_possible(reply_token, f"รายงานหน้าบ้านวันที่ {_thai_date(report_date)} เคยส่งแล้วครับ")
         return {"ok": True, "skipped": True, "reason": "already_sent"}
 
-    text = str(pending.get("text") or "").strip()
     if not text:
         _reply_if_possible(reply_token, "preview ว่างครับ ให้ส่ง preview ใหม่ก่อน")
         return {"ok": False, "reason": "empty_pending_text"}
@@ -2693,9 +2718,56 @@ def _handle_front_cf_command(group_id: str, reply_token: Optional[str]) -> dict:
         return {"ok": False, "reason": "line_push_failed"}
 
     _mark_front_line(report_date, "sent", attempt_id, preview=text)
-    _mark_front_review_sent(report_date, attempt_id)
+    if pending:
+        _mark_front_review_sent(report_date, attempt_id)
     _reply_if_possible(reply_token, f"ส่งรายงานหน้าบ้าน Everly วันที่ {_thai_date(report_date)} แล้วครับ")
-    return {"ok": True, "sent": True, "date": report_date.isoformat()}
+    return {"ok": True, "sent": True, "date": report_date.isoformat(), "source": source}
+
+
+@app.post("/api/everly/line-router-command")
+def everly_line_router_command(
+    request: Request,
+    payload: Optional[dict] = Body(None),
+    secret: Optional[str] = Query(None, description="CRON_SECRET required for shared LINE router calls."),
+):
+    """Receive commands from a shared LINE webhook router without owning LINE webhook.
+
+    The shared router verifies the LINE signature and forwards only groupId,
+    message text, and optionally replyToken. This keeps other brands from being
+    overwritten by Everly's webhook setting.
+    """
+    _require_cron_secret(request, secret, "Everly LINE router command")
+    if not isinstance(payload, dict):
+        raise HTTPException(400, "JSON body required")
+
+    group_id = str(payload.get("group_id") or payload.get("groupId") or "").strip()
+    text = str(payload.get("text") or "").strip()
+    reply_token = str(payload.get("reply_token") or payload.get("replyToken") or "").strip() or None
+    if not group_id:
+        raise HTTPException(400, "group_id required")
+
+    _remember_line_group(group_id, "router")
+    if _is_test_command(text):
+        _reply_if_possible(
+            reply_token,
+            "\n".join([
+                "EVERLY LINE SETUP",
+                "",
+                "พบ groupId ของกลุ่มนี้แล้ว:",
+                group_id,
+                "",
+                "หลังบ้าน Everly ใช้ LINE_GROUP_ID_EVERLY",
+                "หน้าบ้าน Everly ใช้ LINE_GROUP_ID_EVERLY_FRONT",
+            ]),
+        )
+        return {"ok": True, "brand": "Everly Clinic", "command": "test", "group_id": group_id}
+    if _is_cf_command(text):
+        return {
+            "brand": "Everly Clinic",
+            "command": "CF",
+            **_handle_front_cf_command(group_id, reply_token),
+        }
+    return {"ok": True, "brand": "Everly Clinic", "command": "ignored", "group_id": group_id}
 
 
 @app.post("/line/webhook")

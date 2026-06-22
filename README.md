@@ -49,6 +49,32 @@ GitHub Actions cron ยิง endpoint `/api/cron/run` ทุกวันช่�
 
 ห้ามส่งหน้าบ้านโดยตรงก่อน CF และต้องตั้ง `LINE_CHANNEL_SECRET` เพื่อให้ webhook ตรวจลายเซ็น LINE ได้จริง
 
+### ใช้ LINE channel ร่วมกับหลายแบรนด์
+
+ถ้า LINE channel เดียวกันถูกใช้กับหลายแบรนด์ ห้ามให้โปรเจกต์แต่ละแบรนด์ตั้ง webhook เอง เพราะ LINE มี webhook URL ได้ทีละ 1 URL เท่านั้น และโปรเจกต์ที่ตั้งทีหลังจะทับของแบรนด์อื่นทันที
+
+ค่าเริ่มต้นของ Everly จึงปิดการ sync webhook ไว้ (`ALLOW_LINE_WEBHOOK_SYNC=false`) เพื่อไม่ทำลายงานแบรนด์อื่น
+
+โครงที่ถูกต้องสำหรับหลายแบรนด์:
+
+1. ตั้ง LINE webhook ไปที่ router กลางเพียงที่เดียว
+2. Router กลางตรวจ `groupId`
+3. ถ้าเป็นกลุ่มหลังบ้าน Everly และพิมพ์ `CF` ให้ router เรียก:
+   `POST https://everly-clinic.onrender.com/api/everly/line-router-command`
+4. ส่ง JSON:
+
+```json
+{
+  "group_id": "LINE groupId",
+  "text": "CF",
+  "reply_token": "LINE replyToken ถ้ามี"
+}
+```
+
+Header ต้องมี `X-Cron-Secret: <CRON_SECRET ของ Everly>`
+
+ถ้า LINE channel เป็นของ Everly แบรนด์เดียวจริง ๆ เท่านั้น จึงค่อยตั้ง `ALLOW_LINE_WEBHOOK_SYNC=true` แล้วใช้ `/api/line/webhook-config/sync`
+
 ---
 
 ## 🛠 Tech stack
@@ -74,6 +100,7 @@ LINE_GROUP_ID_EVERLY_FRONT=...
 LINE_GROUP_NAME_EVERLY_FRONT=หน้าบ้าน Everly
 LINE_CHANNEL_SECRET=...
 CRON_SECRET=...
+ALLOW_LINE_WEBHOOK_SYNC=false
 ```
 
 Before deploying changes that affect LINE, cron, or security, run:

@@ -7,6 +7,9 @@ Run:   uvicorn api_server:app --port 8000 --reload
        (or: python api_server.py)
 """
 from __future__ import annotations
+import base64
+import hashlib
+import hmac
 import os
 import json
 import time
@@ -47,9 +50,18 @@ app.add_middleware(
 # Path to the dashboard HTML (lives inside the repo for Render deploy)
 DASHBOARD_FILE = ROOT / "dashboard.html"
 ASSETS_DIR = ROOT / "assets"
-SENT_STATE_FILE = Path(os.getenv("SENT_STATE_FILE", "/tmp/everly-line-sent.json"))
-SUMMARY_SNAPSHOT_DIR = Path(os.getenv("SUMMARY_SNAPSHOT_DIR", "/tmp/everly-summary-snapshots"))
+
+
+def _default_state_dir() -> Path:
+    state_dir = os.getenv("EVERLY_STATE_DIR") or os.getenv("DATA_DIR") or os.getenv("RENDER_DISK_MOUNT_PATH")
+    return Path(state_dir) if state_dir else Path("/tmp")
+
+
+SENT_STATE_FILE = Path(os.getenv("SENT_STATE_FILE") or (_default_state_dir() / "everly-line-sent.json"))
+SUMMARY_SNAPSHOT_DIR = Path(os.getenv("SUMMARY_SNAPSHOT_DIR") or (_default_state_dir() / "everly-summary-snapshots"))
+LINE_DISCOVERY_FILE = Path(os.getenv("LINE_DISCOVERY_FILE") or (_default_state_dir() / "everly-line-groups.json"))
 SEND_DAILY_LINE_LOCK = threading.Lock()
+FRONT_REPORT_TEMPLATE_VERSION = "everly-client-daily-v1"
 
 # Mount /assets so brand logos (assets/logos/everly.png etc.) are served
 # directly by FastAPI — used by <img src="/assets/logos/..."> in dashboard.html
@@ -323,8 +335,45 @@ def _require_cron_secret(request: Request, secret: Optional[str] = None, action:
         raise HTTPException(401, "Invalid cron secret")
 
 
+def _cron_secret_optional_for_default_automation(
+    request: Request,
+    secret: Optional[str],
+    *,
+    action: str,
+    force: bool,
+    target: Optional[str],
+    within_window: bool,
+) -> str:
+    """Require CRON_SECRET when configured; otherwise allow only the default midnight automation.
+
+    This keeps Everly's midnight delivery working while Render env is being fixed,
+    but still blocks public callers from forcing or targeting arbitrary sends.
+    """
+    if _configured_cron_secret():
+        _require_cron_secret(request, secret, action)
+        return "secret"
+    if force or target is not None:
+        raise HTTPException(503, f"{action} requires CRON_SECRET for force/target sends")
+    if not within_window:
+        return "missing_secret_outside_window"
+    return "missing_secret_default_window"
+
+
+def _cron_secret_status(request: Request, secret: Optional[str] = None) -> tuple[bool, str]:
+    """Return whether an automation caller is allowed to send external messages."""
+    if not _configured_cron_secret():
+        return False, "CRON_SECRET is not configured"
+    if not _cron_secret_is_valid(request, secret):
+        return False, "invalid or missing CRON_SECRET"
+    return True, ""
+
+
 def _line_configured() -> bool:
     return bool(os.getenv("LINE_CHANNEL_ACCESS_TOKEN") and os.getenv("LINE_GROUP_ID_EVERLY"))
+
+
+def _front_line_configured() -> bool:
+    return bool(os.getenv("LINE_CHANNEL_ACCESS_TOKEN") and os.getenv("LINE_GROUP_ID_EVERLY_FRONT"))
 
 
 def _read_sent_state() -> dict:
@@ -355,20 +404,174 @@ def _write_sent_state(state: dict) -> None:
         pass
 
 
+def _state_storage_info() -> dict:
+    state_file = SENT_STATE_FILE.resolve()
+    summary_dir = SUMMARY_SNAPSHOT_DIR.resolve()
+    state_file_text = str(state_file)
+    configured_file_text = str(SENT_STATE_FILE)
+    uses_tmp = (
+        configured_file_text.startswith("/tmp/")
+        or configured_file_text == "/tmp"
+        or state_file_text.startswith("/tmp/")
+        or state_file_text == "/tmp"
+        or state_file_text.startswith("/private/tmp/")
+        or state_file_text == "/private/tmp"
+    )
+    return {
+        "state_file": str(state_file),
+        "summary_snapshot_dir": str(summary_dir),
+        "state_file_exists": SENT_STATE_FILE.exists(),
+        "state_file_parent_exists": SENT_STATE_FILE.parent.exists(),
+        "uses_tmp_storage": uses_tmp,
+        "persistent_storage_configured": not uses_tmp,
+        "state_env_vars": {
+            "SENT_STATE_FILE": bool(os.getenv("SENT_STATE_FILE")),
+            "SUMMARY_SNAPSHOT_DIR": bool(os.getenv("SUMMARY_SNAPSHOT_DIR")),
+            "EVERLY_STATE_DIR": bool(os.getenv("EVERLY_STATE_DIR")),
+            "DATA_DIR": bool(os.getenv("DATA_DIR")),
+            "RENDER_DISK_MOUNT_PATH": bool(os.getenv("RENDER_DISK_MOUNT_PATH")),
+        },
+    }
+
+
 def _already_sent(report_date: date) -> Optional[dict]:
     return _read_sent_state().get(report_date.isoformat())
 
 
 def _mark_sent(report_date: date, preview: str) -> None:
     state = _read_sent_state()
-    # Keep the file tiny: only retain the latest 45 report markers.
     state[report_date.isoformat()] = {
         "sent_at": now_bkk().isoformat(),
         "line_retry_key": _daily_line_retry_key(report_date),
         "preview": preview[:180],
     }
-    items = sorted(state.items())[-45:]
-    _write_sent_state(dict(items))
+    review_key = _front_review_key(report_date)
+    existing_review = state.get(review_key)
+    if not (
+        isinstance(existing_review, dict)
+        and existing_review.get("status") in {"pending_cf", "sent"}
+        and existing_review.get("template_version") == FRONT_REPORT_TEMPLATE_VERSION
+    ):
+        try:
+            front_text = _build_front_line_text(report_date)
+            state[review_key] = {
+                "status": "pending_cf",
+                "date": report_date.isoformat(),
+                "created_at": now_bkk().isoformat(),
+                "attempt_id": f"front-review-auto-{int(time.time())}-{random.randrange(100000, 999999)}",
+                "template_version": FRONT_REPORT_TEMPLATE_VERSION,
+                "source": "daily_back_office_report",
+                "text": front_text,
+                "preview": front_text[:380],
+            }
+        except Exception as e:
+            state[review_key] = {
+                "status": "build_failed",
+                "date": report_date.isoformat(),
+                "created_at": now_bkk().isoformat(),
+                "template_version": FRONT_REPORT_TEMPLATE_VERSION,
+                "source": "daily_back_office_report",
+                "reason": str(e)[:220],
+            }
+    _write_sent_state(_trim_sent_state(state))
+
+
+def _trim_sent_state(state: dict) -> dict:
+    daily_items = [(k, v) for k, v in state.items() if re.fullmatch(r"\d{4}-\d{2}-\d{2}", str(k))]
+    front_items = [(k, v) for k, v in state.items() if str(k).startswith("front-line:")]
+    review_items = [(k, v) for k, v in state.items() if str(k).startswith("front-review:")]
+    preserved = {
+        k: v for k, v in state.items()
+        if k == "line-discovered-groups"
+    }
+    trimmed = dict(sorted(daily_items)[-45:])
+    trimmed.update(dict(sorted(front_items)[-45:]))
+    trimmed.update(dict(sorted(review_items)[-45:]))
+    trimmed.update(preserved)
+    return trimmed
+
+
+def _front_line_key(report_date: date) -> str:
+    return f"front-line:{report_date.isoformat()}"
+
+
+def _front_review_key(report_date: date) -> str:
+    return f"front-review:{report_date.isoformat()}"
+
+
+def _front_line_marker(report_date: date) -> Optional[dict]:
+    marker = _read_sent_state().get(_front_line_key(report_date))
+    return marker if isinstance(marker, dict) else None
+
+
+def _latest_front_review_pending() -> Optional[dict]:
+    pending = [
+        v for k, v in _read_sent_state().items()
+        if str(k).startswith("front-review:") and isinstance(v, dict) and v.get("status") == "pending_cf"
+    ]
+    return sorted(pending, key=lambda x: str(x.get("created_at", "")))[-1] if pending else None
+
+
+def _mark_front_review_pending(report_date: date, text: str, attempt_id: str) -> dict:
+    state = _read_sent_state()
+    marker = {
+        "status": "pending_cf",
+        "date": report_date.isoformat(),
+        "created_at": now_bkk().isoformat(),
+        "attempt_id": attempt_id,
+        "template_version": FRONT_REPORT_TEMPLATE_VERSION,
+        "text": text,
+        "preview": text[:380],
+    }
+    state[_front_review_key(report_date)] = marker
+    _write_sent_state(_trim_sent_state(state))
+    return marker
+
+
+def _mark_front_line(report_date: date, status: str, attempt_id: str, preview: str = "", reason: str = "") -> None:
+    state = _read_sent_state()
+    marker = {
+        "status": status,
+        "date": report_date.isoformat(),
+        "attempt_id": attempt_id,
+        "updated_at": now_bkk().isoformat(),
+        "template_version": FRONT_REPORT_TEMPLATE_VERSION,
+    }
+    if status == "sent":
+        marker["sent_at"] = now_bkk().isoformat()
+    if preview:
+        marker["preview"] = preview[:180]
+    if reason:
+        marker["reason"] = reason[:260]
+    state[_front_line_key(report_date)] = marker
+    _write_sent_state(_trim_sent_state(state))
+
+
+def _remember_line_group(group_id: str, event_type: str) -> None:
+    item = {
+        "group_id": group_id,
+        "event_type": event_type,
+        "seen_at": now_bkk().isoformat(),
+    }
+    state = _read_sent_state()
+    discovered = state.get("line-discovered-groups")
+    discovered = discovered if isinstance(discovered, dict) else {}
+    discovered[group_id] = item
+    state["line-discovered-groups"] = discovered
+    _write_sent_state(_trim_sent_state(state))
+    try:
+        existing = []
+        if LINE_DISCOVERY_FILE.exists():
+            existing = json.loads(LINE_DISCOVERY_FILE.read_text(encoding="utf-8"))
+        existing.append(item)
+        deduped = {}
+        for row in existing[-20:]:
+            if isinstance(row, dict) and row.get("group_id"):
+                deduped[row["group_id"]] = row
+        LINE_DISCOVERY_FILE.parent.mkdir(parents=True, exist_ok=True)
+        LINE_DISCOVERY_FILE.write_text(json.dumps(list(deduped.values()), ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception:
+        pass
 
 
 def _daily_line_retry_key(report_date: date) -> str:
@@ -434,6 +637,7 @@ def health():
         "server_time_bkk": now_bkk().isoformat(),
         "now_bkk": now_bkk().isoformat(),
         "cache_keys": list(_CACHE.keys()),
+        "state_storage": _state_storage_info(),
     }
 
 
@@ -2113,9 +2317,10 @@ def keepalive(
             target_date = _cron_report_date(now)
             with SEND_DAILY_LINE_LOCK:
                 if not _already_sent(target_date):
-                    if _configured_cron_secret() and not _cron_secret_is_valid(request, secret):
+                    secret_ok, secret_reason = _cron_secret_status(request, secret)
+                    if not secret_ok:
                         line_status = "secret_required"
-                        line_reason = "keepalive auto-send requires valid CRON_SECRET"
+                        line_reason = f"keepalive auto-send requires valid CRON_SECRET ({secret_reason})"
                     else:
                         # Inline call — avoid HTTP round-trip
                         if _line_configured():
@@ -2196,6 +2401,8 @@ def token_info():
 def line_status():
     has_token = bool(os.getenv("LINE_CHANNEL_ACCESS_TOKEN"))
     has_everly_group = bool(os.getenv("LINE_GROUP_ID_EVERLY"))
+    has_front_group = bool(os.getenv("LINE_GROUP_ID_EVERLY_FRONT"))
+    has_channel_secret = bool(os.getenv("LINE_CHANNEL_SECRET"))
     has_fallback_group = bool(os.getenv("LINE_GROUP_ID"))
     has_secret = bool(_configured_cron_secret())
     return {
@@ -2203,9 +2410,84 @@ def line_status():
         "has_token": has_token,
         "has_group": has_everly_group,
         "has_everly_group": has_everly_group,
+        "has_front_group": has_front_group,
+        "front_configured": has_token and has_front_group,
+        "has_channel_secret": has_channel_secret,
         "fallback_group_present_but_ignored": has_fallback_group,
         "manual_send_locked": True,
         "cron_secret_configured": has_secret,
+    }
+
+
+def _canonical_line_webhook_url() -> str:
+    return os.getenv("LINE_WEBHOOK_URL", "https://everly-clinic.onrender.com/api/line/webhook")
+
+
+@app.get("/api/line/webhook-config")
+def line_webhook_config():
+    token = os.getenv("LINE_CHANNEL_ACCESS_TOKEN", "")
+    expected = _canonical_line_webhook_url()
+    if not token:
+        return {
+            "ok": False,
+            "configured": False,
+            "expected_endpoint": expected,
+            "has_token": False,
+            "has_channel_secret": bool(os.getenv("LINE_CHANNEL_SECRET")),
+        }
+    try:
+        import requests
+        r = requests.get(
+            "https://api.line.me/v2/bot/channel/webhook/endpoint",
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=10,
+        )
+        payload = r.json() if r.text else {}
+        endpoint = payload.get("endpoint")
+        return {
+            "ok": 200 <= r.status_code < 300,
+            "http_status": r.status_code,
+            "expected_endpoint": expected,
+            "endpoint": endpoint,
+            "active": payload.get("active"),
+            "matches_expected": endpoint == expected,
+            "has_channel_secret": bool(os.getenv("LINE_CHANNEL_SECRET")),
+            "raw": payload,
+        }
+    except Exception as e:
+        return {
+            "ok": False,
+            "expected_endpoint": expected,
+            "has_channel_secret": bool(os.getenv("LINE_CHANNEL_SECRET")),
+            "error": str(e)[:220],
+        }
+
+
+@app.get("/api/line/discovered-groups")
+def line_discovered_groups():
+    groups_by_id = {}
+    try:
+        state_groups = _read_sent_state().get("line-discovered-groups")
+        if isinstance(state_groups, dict):
+            groups_by_id.update({
+                group_id: item for group_id, item in state_groups.items()
+                if isinstance(item, dict)
+            })
+    except Exception:
+        pass
+    try:
+        file_groups = json.loads(LINE_DISCOVERY_FILE.read_text(encoding="utf-8"))
+        for item in file_groups if isinstance(file_groups, list) else []:
+            if isinstance(item, dict) and item.get("group_id"):
+                groups_by_id[item["group_id"]] = item
+    except Exception:
+        pass
+    groups = sorted(groups_by_id.values(), key=lambda x: str(x.get("seen_at", "")), reverse=True)
+    return {
+        "ok": True,
+        "brand": "Everly Clinic",
+        "state_file": str(LINE_DISCOVERY_FILE),
+        "groups": groups,
     }
 
 
@@ -2230,6 +2512,144 @@ def line_send(
     if not ok:
         raise HTTPException(502, "LINE push failed (check server logs)")
     return {"ok": True, "sent_at": now_bkk().isoformat()}
+
+
+def _verify_line_signature(request: Request, body: bytes) -> None:
+    secret = os.getenv("LINE_CHANNEL_SECRET", "").strip()
+    if not secret:
+        raise HTTPException(503, "LINE_CHANNEL_SECRET is required before Everly webhook can accept events")
+    supplied = request.headers.get("x-line-signature", "")
+    digest = hmac.new(secret.encode("utf-8"), body, hashlib.sha256).digest()
+    expected = base64.b64encode(digest).decode("utf-8")
+    if not hmac.compare_digest(supplied, expected):
+        raise HTTPException(401, "Invalid LINE signature")
+
+
+def _reply_if_possible(reply_token: Optional[str], text: str) -> None:
+    if not reply_token:
+        return
+    try:
+        from lib.notify import reply_line_text
+        reply_line_text(reply_token, text)
+    except Exception:
+        pass
+
+
+def _is_test_command(text: str) -> bool:
+    return text.strip().casefold() in {"test", "เทส", "ทดสอบ"}
+
+
+def _is_cf_command(text: str) -> bool:
+    return text.strip().upper() in {"CF", "CF FRONT", "CF EVERLY", "CF EVERLY FRONT", "CF หน้าบ้าน"}
+
+
+def _mark_front_review_sent(report_date: date, attempt_id: str) -> None:
+    state = _read_sent_state()
+    key = _front_review_key(report_date)
+    marker = state.get(key)
+    if isinstance(marker, dict):
+        marker["status"] = "sent"
+        marker["sent_at"] = now_bkk().isoformat()
+        marker["front_attempt_id"] = attempt_id
+        state[key] = marker
+        _write_sent_state(_trim_sent_state(state))
+
+
+def _handle_front_cf_command(group_id: str, reply_token: Optional[str]) -> dict:
+    back_group = os.getenv("LINE_GROUP_ID_EVERLY", "")
+    front_group = os.getenv("LINE_GROUP_ID_EVERLY_FRONT", "")
+
+    if not back_group:
+        _reply_if_possible(reply_token, "ยัง CF ไม่ได้: ต้องตั้ง LINE_GROUP_ID_EVERLY หลังบ้านก่อนครับ")
+        return {"ok": False, "reason": "back_group_missing"}
+    if group_id != back_group:
+        _reply_if_possible(reply_token, "CF รับได้เฉพาะกลุ่มหลังบ้าน Everly เท่านั้นครับ")
+        return {"ok": False, "reason": "not_back_office_group"}
+    if not front_group:
+        _reply_if_possible(reply_token, "ยังส่งหน้าบ้านไม่ได้: ต้องตั้ง LINE_GROUP_ID_EVERLY_FRONT ก่อนครับ")
+        return {"ok": False, "reason": "front_group_missing"}
+    if front_group == back_group:
+        _reply_if_possible(reply_token, "ยังส่งไม่ได้: LINE_GROUP_ID_EVERLY_FRONT ต้องไม่ใช่กลุ่มเดียวกับหลังบ้านครับ")
+        return {"ok": False, "reason": "front_group_same_as_back"}
+
+    pending = _latest_front_review_pending()
+    if not pending:
+        _reply_if_possible(reply_token, "ยังไม่มีรายงานหน้าบ้านที่รอ CF ครับ ให้ส่ง preview เข้าหลังบ้านก่อน")
+        return {"ok": False, "reason": "no_pending_review"}
+    if pending.get("template_version") != FRONT_REPORT_TEMPLATE_VERSION:
+        _reply_if_possible(reply_token, "preview หน้าบ้านเป็นเวอร์ชันเก่าแล้วครับ ให้ส่ง preview ใหม่ก่อนแล้วค่อย CF")
+        return {"ok": False, "reason": "template_version_mismatch"}
+
+    report_date = date.fromisoformat(pending["date"])
+    existing = _front_line_marker(report_date)
+    if existing and existing.get("status") == "sent":
+        _reply_if_possible(reply_token, f"รายงานหน้าบ้านวันที่ {_thai_date(report_date)} เคยส่งแล้วครับ")
+        return {"ok": True, "skipped": True, "reason": "already_sent"}
+
+    text = str(pending.get("text") or "").strip()
+    if not text:
+        _reply_if_possible(reply_token, "preview ว่างครับ ให้ส่ง preview ใหม่ก่อน")
+        return {"ok": False, "reason": "empty_pending_text"}
+
+    attempt_id = f"front-{int(time.time())}-{random.randrange(100000, 999999)}"
+    _mark_front_line(report_date, "sending", attempt_id)
+    try:
+        from lib.notify import send_line_to_group_env
+        ok = send_line_to_group_env(text, "LINE_GROUP_ID_EVERLY_FRONT")
+    except Exception:
+        ok = False
+    if not ok:
+        _mark_front_line(report_date, "failed", attempt_id, reason="LINE push failed")
+        _reply_if_possible(reply_token, "ส่งหน้าบ้านไม่สำเร็จครับ ต้องเช็ก LINE_GROUP_ID_EVERLY_FRONT / LINE token")
+        return {"ok": False, "reason": "line_push_failed"}
+
+    _mark_front_line(report_date, "sent", attempt_id, preview=text)
+    _mark_front_review_sent(report_date, attempt_id)
+    _reply_if_possible(reply_token, f"ส่งรายงานหน้าบ้าน Everly วันที่ {_thai_date(report_date)} แล้วครับ")
+    return {"ok": True, "sent": True, "date": report_date.isoformat()}
+
+
+@app.post("/line/webhook")
+@app.post("/api/line/webhook")
+async def line_webhook(request: Request):
+    raw = await request.body()
+    _verify_line_signature(request, raw)
+    try:
+        payload = json.loads(raw.decode("utf-8") or "{}")
+    except Exception:
+        raise HTTPException(400, "Invalid LINE webhook JSON")
+
+    group_ids = []
+    handled = []
+    for event in payload.get("events", []):
+        source = event.get("source") or {}
+        group_id = source.get("groupId") if source.get("type") == "group" else None
+        if not group_id:
+            continue
+        group_ids.append(group_id)
+        _remember_line_group(group_id, event.get("type", "unknown"))
+
+        reply_token = event.get("replyToken")
+        message = event.get("message") or {}
+        text = str(message.get("text") or "").strip() if message.get("type") == "text" else ""
+        if _is_test_command(text):
+            _reply_if_possible(
+                reply_token,
+                "\n".join([
+                    "EVERLY LINE SETUP",
+                    "",
+                    "พบ groupId ของกลุ่มนี้แล้ว:",
+                    group_id,
+                    "",
+                    "ถ้าเป็นกลุ่มหลังบ้าน ส่งให้ Codex ตั้ง LINE_GROUP_ID_EVERLY",
+                    "ถ้าเป็นกลุ่มหน้าบ้าน ส่งให้ Codex ตั้ง LINE_GROUP_ID_EVERLY_FRONT",
+                ]),
+            )
+            handled.append({"group_id": group_id, "command": "test"})
+        elif _is_cf_command(text):
+            handled.append({"group_id": group_id, "command": "CF", **_handle_front_cf_command(group_id, reply_token)})
+
+    return {"ok": True, "brand": "Everly Clinic", "group_ids": sorted(set(group_ids)), "handled": handled}
 
 
 THAI_MONTHS = ['มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
@@ -2434,6 +2854,208 @@ def _build_daily_text(target_d: date) -> str:
     return "\n".join(L)
 
 
+def _build_front_line_text(target_d: date) -> str:
+    """Build a customer-safe Everly report for the front LINE group."""
+    month_start = date(target_d.year, target_d.month, 1)
+
+    day_records = _fetch_range(target_d, target_d)
+    if day_records:
+        sel = _day_totals(day_records[0])
+        sel_spend = sel["spent"]
+        sel_inbox = sel["result"]
+        sel_conv = sel["conversion"]
+    else:
+        sel_spend = sel_inbox = sel_conv = 0
+
+    mtd_records = _fetch_range(month_start, target_d)
+    mtd_days = [_day_totals(r) for r in mtd_records if r]
+    mtd_spend = sum(d["spent"] for d in mtd_days)
+    mtd_inbox = sum(d["result"] for d in mtd_days)
+    mtd_conv = sum(d["conversion"] for d in mtd_days)
+    mtd_n = len(mtd_days) or 1
+    avg_daily = round(mtd_spend / mtd_n)
+    sel_cpr = round(sel_spend / sel_inbox) if sel_inbox else 0
+    mtd_cpr = round(mtd_spend / mtd_inbox) if mtd_inbox else 0
+    mtd_roas = (mtd_conv / mtd_spend) if mtd_spend else 0
+
+    L = []
+    L.append("EVERLY CLINIC — CLIENT DAILY REPORT")
+    L.append(f"วันที่รายงาน: {_thai_date(target_d)}")
+    L.append(f"เกณฑ์วัดผลแอด: MTD {_thai_range(month_start, target_d)}")
+    L.append("")
+    L.append("============")
+    L.append("1) วันนี้")
+    L.append(f"- ใช้เงิน: ฿{sel_spend:,.2f}")
+    L.append(f"- คนทัก: {sel_inbox} คน")
+    L.append(f"- เฉลี่ยต่อคนทัก: ฿{sel_cpr:,}" if sel_inbox else "- เฉลี่ยต่อคนทัก: —")
+    L.append(f"- ยอดขายจากระบบ: ฿{round(sel_conv):,}")
+    L.append("")
+    L.append("============")
+    L.append("2) สะสมเดือนนี้")
+    L.append(f"- ช่วงข้อมูล: {_thai_range(month_start, target_d)}")
+    L.append(f"- ใช้เงินรวม: ฿{round(mtd_spend):,}")
+    L.append(f"- เฉลี่ยต่อวัน: ฿{avg_daily:,}")
+    L.append(f"- คนทักรวม: {mtd_inbox} คน")
+    L.append(f"- เฉลี่ยต่อคนทัก: ฿{mtd_cpr:,}" if mtd_inbox else "- เฉลี่ยต่อคนทัก: —")
+    L.append(f"- ยอดขายจากระบบ: ฿{round(mtd_conv):,}")
+    L.append(f"- ROAS เดือนนี้: {mtd_roas:.2f}x")
+    L.append("")
+    L.append("============")
+    L.append("3) หมายเหตุจากทีม")
+    if sel_spend == 0:
+        L.append("- วันนี้ระบบโฆษณายังไม่เกิดยอดใช้จ่าย ทีมกำลังตรวจสอบการส่งมอบแอด")
+    elif sel_inbox == 0:
+        L.append("- วันนี้มีการใช้งบแล้ว แต่ยังไม่มีคนทักในระบบ ทีมกำลังดูคุณภาพแคมเปญ")
+    else:
+        L.append("- ข้อมูลนี้ดึงจาก Meta Ads และอัปเดตตามรอบระบบ")
+    L.append("- รายงานนี้เป็นเวอร์ชันลูกค้า ตัดข้อมูลเทคนิคภายในออกแล้ว")
+    L.append("============")
+    return "\n".join(L)
+
+
+def _build_front_review_text(report_date: date, front_text: str) -> str:
+    return "\n".join([
+        "EVERLY FRONT REPORT — REVIEW",
+        f"วันที่รายงาน: {_thai_date(report_date)}",
+        "",
+        "ตรวจข้อความด้านล่างก่อนส่งเข้ากลุ่มหน้าบ้าน",
+        "ถ้าผ่าน ให้พิมพ์: CF",
+        "",
+        "============",
+        "ข้อความที่จะส่งหน้าบ้าน",
+        front_text,
+    ])
+
+
+@app.get("/api/everly/front-line/status")
+def front_line_status():
+    state = _read_sent_state()
+    front_markers = {
+        k: v for k, v in state.items()
+        if str(k).startswith("front-line:") and isinstance(v, dict)
+    }
+    review_markers = {
+        k: v for k, v in state.items()
+        if str(k).startswith("front-review:") and isinstance(v, dict)
+    }
+    return {
+        "ok": True,
+        "brand": "Everly Clinic",
+        "mode": "front",
+        "line_configured": _front_line_configured(),
+        "has_token": bool(os.getenv("LINE_CHANNEL_ACCESS_TOKEN")),
+        "has_front_group": bool(os.getenv("LINE_GROUP_ID_EVERLY_FRONT")),
+        "has_back_group": bool(os.getenv("LINE_GROUP_ID_EVERLY")),
+        "has_channel_secret": bool(os.getenv("LINE_CHANNEL_SECRET")),
+        "front_group_label": os.getenv("LINE_GROUP_NAME_EVERLY_FRONT", "หน้าบ้าน Everly"),
+        "auto_send_enabled": False,
+        "cf_required": True,
+        "safe_for_front_group": True,
+        "state_storage": _state_storage_info(),
+        "latest_front_markers": dict(sorted(front_markers.items())[-5:]),
+        "latest_review_markers": dict(sorted(review_markers.items())[-5:]),
+    }
+
+
+@app.get("/api/everly/front-line/text")
+def front_line_text(target: Optional[str] = Query(None)):
+    d = date.fromisoformat(target) if target else _default_report_date()
+    return {
+        "ok": True,
+        "date": d.isoformat(),
+        "safe_for_front_group": True,
+        "text": _build_front_line_text(d),
+    }
+
+
+@app.get("/api/everly/front-line/review")
+@app.post("/api/everly/front-line/review")
+def review_front_line(
+    request: Request,
+    target: Optional[str] = Query(None),
+    force: bool = Query(False),
+    dry_run: bool = Query(False),
+    secret: Optional[str] = Query(None),
+):
+    if not dry_run:
+        _require_cron_secret(request, secret, "Everly front review")
+
+    d = date.fromisoformat(target) if target else _default_report_date()
+    front_text = _build_front_line_text(d)
+    review_text = _build_front_review_text(d, front_text)
+    pending = _latest_front_review_pending()
+    pending_is_same_date = bool(pending and pending.get("date") == d.isoformat())
+    already_sent = _front_line_marker(d)
+
+    if dry_run:
+        return {
+            "ok": True,
+            "dry_run": True,
+            "date": d.isoformat(),
+            "line_back_configured": _line_configured(),
+            "line_front_configured": _front_line_configured(),
+            "has_pending_review": pending_is_same_date,
+            "front_already_sent": bool(already_sent),
+            "safe_for_front_group": True,
+            "cf_command": "CF",
+            "preview": review_text[:2200] + ("..." if len(review_text) > 2200 else ""),
+        }
+
+    if already_sent and not force:
+        return {
+            "ok": True,
+            "skipped": True,
+            "reason": "front_already_sent",
+            "date": d.isoformat(),
+        }
+    if pending_is_same_date and not force:
+        return {
+            "ok": True,
+            "skipped": True,
+            "reason": "review_already_pending",
+            "date": d.isoformat(),
+            "cf_command": "CF",
+        }
+    if not _line_configured():
+        raise HTTPException(503, "Back-office LINE not configured (set LINE_CHANNEL_ACCESS_TOKEN + LINE_GROUP_ID_EVERLY)")
+
+    from lib.notify import send_line_to_group_env
+    ok = send_line_to_group_env(review_text, "LINE_GROUP_ID_EVERLY")
+    if not ok:
+        raise HTTPException(502, "Back-office LINE review push failed")
+
+    attempt_id = f"front-review-{int(time.time())}-{random.randrange(100000, 999999)}"
+    marker = _mark_front_review_pending(d, front_text, attempt_id)
+    return {
+        "ok": True,
+        "date": d.isoformat(),
+        "sent_to": "back_office",
+        "pending_status": marker.get("status"),
+        "cf_command": "CF",
+        "safe_for_front_group": True,
+        "sent_at": now_bkk().isoformat(),
+    }
+
+
+@app.get("/api/everly/front-line/send")
+@app.post("/api/everly/front-line/send")
+def front_line_send_diagnostic(target: Optional[str] = Query(None), dry_run: bool = Query(True)):
+    d = date.fromisoformat(target) if target else _default_report_date()
+    existing = _front_line_marker(d)
+    text = _build_front_line_text(d)
+    return {
+        "ok": True,
+        "dry_run": True,
+        "front_report": "would_skip",
+        "reason": "front_line_requires_back_office_CF",
+        "date": d.isoformat(),
+        "already_sent": bool(existing),
+        "line_configured": _front_line_configured(),
+        "safe_for_front_group": True,
+        "preview": text[:1600] + ("..." if len(text) > 1600 else ""),
+    }
+
+
 @app.post("/api/everly/send-daily-line")
 def send_daily_line(
     request: Request,
@@ -2444,13 +3066,20 @@ def send_daily_line(
     """Build daily report and push to LINE.
     Called by GitHub Actions at 00:00 BKK (17:00 UTC) every day.
     `target` defaults to the previous complete day around midnight BKK.
-    Token-protected via X-Cron-Secret header when CRON_SECRET is configured.
-    Force/target sends always require CRON_SECRET to avoid public resends.
+    Token-protected via X-Cron-Secret header. Any external LINE send requires
+    CRON_SECRET so public health checks cannot accidentally push reports.
     """
-    if force or target is not None or _configured_cron_secret():
-        _require_cron_secret(request, secret, "Daily LINE send")
+    within_window = _within_auto_send_window()
+    auth_mode = _cron_secret_optional_for_default_automation(
+        request,
+        secret,
+        action="Daily LINE send",
+        force=force,
+        target=target,
+        within_window=within_window,
+    )
 
-    if not force and target is None and not _within_auto_send_window():
+    if not force and target is None and not within_window:
         now = now_bkk()
         return {
             "ok": True,
@@ -2490,13 +3119,14 @@ def send_daily_line(
         return {
             "ok": True,
             "skipped": False,
+            "auth_mode": auth_mode,
             "date": d.isoformat(),
             "sent_at": now_bkk().isoformat(),
             "preview": text[:200] + ("..." if len(text) > 200 else ""),
         }
 
 
-@app.api_route("/api/cron/run", methods=["GET", "POST"])
+@app.api_route("/api/cron/run", methods=["GET", "POST"], include_in_schema=False)
 def cron_run(
     request: Request,
     force_daily: bool = Query(False, description="Force send the daily LINE report."),
@@ -2510,13 +3140,21 @@ def cron_run(
     after midnight report the previous complete day. Sending is idempotent per
     report date.
     """
-    if force_daily or target is not None or _configured_cron_secret():
-        _require_cron_secret(request, secret, "Cron run")
-
     now = now_bkk()
     d = date.fromisoformat(target) if target else _cron_report_date(now)
     within_window = _within_cron_send_window(now)
     existing = _already_sent(d)
+    auth_mode = "dry_run"
+
+    if not dry_run:
+        auth_mode = _cron_secret_optional_for_default_automation(
+            request,
+            secret,
+            action="Cron run",
+            force=force_daily,
+            target=target,
+            within_window=within_window,
+        )
 
     if dry_run:
         preview = ""
@@ -2533,6 +3171,7 @@ def cron_run(
             "now_bkk": now.isoformat(),
             "within_window": within_window,
             "already_sent": bool(existing),
+            "auth_mode": auth_mode,
             "preview": preview,
         }
 
@@ -2576,6 +3215,7 @@ def cron_run(
             "ok": True,
             "skipped": False,
             "daily_report": "sent",
+            "auth_mode": auth_mode,
             "date": d.isoformat(),
             "sent_at": now_bkk().isoformat(),
             "preview": text[:200] + ("..." if len(text) > 200 else ""),
@@ -2598,7 +3238,7 @@ def send_state():
     state = _read_sent_state()
     return {
         "ok": True,
-        "state_file": str(SENT_STATE_FILE),
+        "state_storage": _state_storage_info(),
         "sent_dates": sorted(state.keys()),
         "latest": dict(sorted(state.items())[-5:]),
     }

@@ -44,7 +44,8 @@ jobs:
           if [ -n "${CRON_SECRET:-}" ]; then
             AUTH_HEADER=(-H "X-Cron-Secret: $CRON_SECRET")
           else
-            echo "  ! CRON_SECRET GitHub secret not set; locked LINE alerts may be skipped"
+            echo "  ✗ CRON_SECRET GitHub secret is required"
+            exit 1
           fi
 
           # 1. Health endpoint

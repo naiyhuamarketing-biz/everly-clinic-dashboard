@@ -37,6 +37,18 @@ GitHub Actions cron ยิง endpoint `/api/cron/run` ทุกวันช่�
 
 ห้ามใช้ `LINE_GROUP_ID` รวมกับแบรนด์อื่น เพราะเสี่ยงส่งรายงานลูกค้าเข้าผิดกลุ่ม
 
+## 📲 LINE Front Group (ลูกค้า / หน้าบ้าน)
+
+หน้าบ้าน Everly ใช้ตัวแปรแยก `LINE_GROUP_ID_EVERLY_FRONT` และต้องส่งผ่านระบบอนุมัติเท่านั้น:
+
+1. พิมพ์ `test` ในกลุ่ม LINE → webhook จะตอบ groupId
+2. ถ้าเป็นกลุ่มหน้าบ้าน Everly ให้ตั้ง `LINE_GROUP_ID_EVERLY_FRONT`
+3. ส่ง preview เข้าหลังบ้านผ่าน `/api/everly/front-line/review`
+4. หลังบ้านตรวจแล้วพิมพ์ `CF`
+5. ระบบจึงส่งข้อความ safe-for-client ไปหน้าบ้าน
+
+ห้ามส่งหน้าบ้านโดยตรงก่อน CF และต้องตั้ง `LINE_CHANNEL_SECRET` เพื่อให้ webhook ตรวจลายเซ็น LINE ได้จริง
+
 ---
 
 ## 🛠 Tech stack
@@ -58,8 +70,21 @@ FB_APP_SECRET=<set in Render only>
 FB_ACCOUNT_EVERLY=1965556974211662
 LINE_CHANNEL_ACCESS_TOKEN=...
 LINE_GROUP_ID_EVERLY=...
+LINE_GROUP_ID_EVERLY_FRONT=...
+LINE_GROUP_NAME_EVERLY_FRONT=หน้าบ้าน Everly
+LINE_CHANNEL_SECRET=...
 CRON_SECRET=...
 ```
+
+Before deploying changes that affect LINE, cron, or security, run:
+
+```bash
+python scripts/brand_guard.py
+python scripts/deploy_preflight.py
+```
+
+`deploy_preflight.py` must pass before deploy. If it reports `Render CRON_SECRET is missing`,
+set `CRON_SECRET` in Render to the same value used in GitHub Actions first.
 
 ---
 

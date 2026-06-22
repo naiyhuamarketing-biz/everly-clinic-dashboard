@@ -1,9 +1,13 @@
 name: Daily LINE notification
 
-# Schedule disabled: Everly midnight LINE delivery now runs through the
-# production cron sender with persistent state and duplicate-send protection.
-# Keep workflow_dispatch only for manual debugging.
 on:
+  schedule:
+    # 00:00 BKK primary send, with near-midnight backups.
+    # The API is idempotent per report date, so later runs skip after success.
+    - cron: '0 17 * * *'
+    - cron: '9 17 * * *'
+    - cron: '29 17 * * *'
+    - cron: '49 17 * * *'
   workflow_dispatch:  # manual trigger from GitHub UI
 
 concurrency:

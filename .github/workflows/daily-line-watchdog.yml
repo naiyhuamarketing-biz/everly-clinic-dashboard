@@ -1,9 +1,10 @@
 name: Daily LINE watchdog
 
-# Schedule disabled: Everly midnight LINE delivery now runs through the
-# production cron sender with persistent state and duplicate-send protection.
-# Keep workflow_dispatch only for manual debugging.
 on:
+  schedule:
+    # Rescue runs if the primary midnight schedule is delayed or missed.
+    - cron: '30 18 * * *'  # 01:30 BKK
+    - cron: '30 23 * * *'  # 06:30 BKK
   workflow_dispatch:
 
 concurrency:
